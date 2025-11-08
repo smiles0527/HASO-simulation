@@ -1,0 +1,348 @@
+# Hospital Wing Layout - More Complex
+# Multiple patient rooms, nurse station, emergency exit
+
+building:
+  type: "hospital"
+  num_floors: 1
+
+nodes:
+  # Exits
+  - id: 0
+    type: "EXIT"
+    floor: 0
+    x: 0
+    y: 0
+    name: "Emergency Exit A"
+    room_priority: 1
+    search_time: 1.0
+  
+  - id: 1
+    type: "EXIT"
+    floor: 0
+    x: 50
+    y: 0
+    name: "Emergency Exit B"
+    room_priority: 1
+    search_time: 1.0
+  
+  # Main Corridor
+  - id: 2
+    type: "CORRIDOR"
+    floor: 0
+    x: 10
+    y: 0
+    name: "West Corridor"
+    area: 25
+    room_priority: 5
+    sector_id: 0
+    search_time: 3.0
+  
+  - id: 3
+    type: "CORRIDOR"
+    floor: 0
+    x: 25
+    y: 0
+    name: "Central Corridor"
+    area: 30
+    room_priority: 5
+    sector_id: 1
+    search_time: 3.0
+  
+  - id: 4
+    type: "CORRIDOR"
+    floor: 0
+    x: 40
+    y: 0
+    name: "East Corridor"
+    area: 25
+    room_priority: 5
+    sector_id: 2
+    search_time: 3.0
+  
+  # Checkpoint/Nurse Station
+  - id: 5
+    type: "CHECKPOINT"
+    floor: 0
+    x: 25
+    y: 5
+    name: "Nurse Station"
+    area: 20
+    room_priority: 2
+    sector_id: 1
+    sector_priority: 1
+    search_time: 5.0
+  
+  # Patient Rooms - North Side
+  - id: 6
+    type: "SMALL_ROOM"
+    floor: 0
+    x: 10
+    y: 8
+    name: "Room 201"
+    area: 20
+    room_priority: 1
+    sector_id: 0
+    sector_priority: 1
+    search_time: 7.0
+  
+  - id: 7
+    type: "SMALL_ROOM"
+    floor: 0
+    x: 18
+    y: 8
+    name: "Room 202"
+    area: 20
+    room_priority: 1
+    sector_id: 0
+    sector_priority: 1
+    search_time: 7.0
+  
+  - id: 8
+    type: "SMALL_ROOM"
+    floor: 0
+    x: 32
+    y: 8
+    name: "Room 203"
+    area: 20
+    room_priority: 1
+    sector_id: 2
+    sector_priority: 1
+    search_time: 7.0
+    hazard: "SMOKE"
+    hazard_severity: 0.6
+  
+  - id: 9
+    type: "SMALL_ROOM"
+    floor: 0
+    x: 40
+    y: 8
+    name: "Room 204"
+    area: 20
+    room_priority: 1
+    sector_id: 2
+    sector_priority: 1
+    search_time: 7.0
+  
+  # Patient Rooms - South Side
+  - id: 10
+    type: "SMALL_ROOM"
+    floor: 0
+    x: 10
+    y: -8
+    name: "Room 205"
+    area: 20
+    room_priority: 1
+    sector_id: 0
+    sector_priority: 1
+    search_time: 7.0
+  
+  - id: 11
+    type: "SMALL_ROOM"
+    floor: 0
+    x: 18
+    y: -8
+    name: "Room 206"
+    area: 20
+    room_priority: 1
+    sector_id: 0
+    sector_priority: 1
+    search_time: 7.0
+  
+  - id: 12
+    type: "SMALL_ROOM"
+    floor: 0
+    x: 32
+    y: -8
+    name: "Room 207"
+    area: 20
+    room_priority: 1
+    sector_id: 2
+    sector_priority: 1
+    search_time: 7.0
+  
+  - id: 13
+    type: "SMALL_ROOM"
+    floor: 0
+    x: 40
+    y: -8
+    name: "Room 208"
+    area: 20
+    room_priority: 1
+    sector_id: 2
+    sector_priority: 1
+    search_time: 7.0
+  
+  # Common Areas
+  - id: 14
+    type: "CONNECTED_LARGE_ROOM"
+    floor: 0
+    x: 25
+    y: -15
+    name: "Waiting Area"
+    area: 50
+    room_priority: 3
+    sector_id: 1
+    search_time: 12.0
+
+edges:
+  # Exit connections
+  - src: 0
+    dst: 2
+    type: "OPEN_DOOR"
+    length: 10.0
+    width: 2.0
+  
+  - src: 1
+    dst: 4
+    type: "OPEN_DOOR"
+    length: 10.0
+    width: 2.0
+  
+  # Main corridor
+  - src: 2
+    dst: 3
+    type: "HALLWAY"
+    length: 15.0
+    width: 3.0
+  
+  - src: 3
+    dst: 4
+    type: "HALLWAY"
+    length: 15.0
+    width: 3.0
+  
+  # Nurse station
+  - src: 3
+    dst: 5
+    type: "OPEN_AREA"
+    length: 5.0
+    width: 2.0
+  
+  # North patient rooms
+  - src: 2
+    dst: 6
+    type: "OPEN_DOOR"
+    length: 8.0
+    width: 1.2
+  
+  - src: 2
+    dst: 7
+    type: "OPEN_DOOR"
+    length: 8.0
+    width: 1.2
+  
+  - src: 4
+    dst: 8
+    type: "CLOSED_DOOR"
+    length: 8.0
+    width: 1.2
+    is_open: false
+    open_time: 2.0
+  
+  - src: 4
+    dst: 9
+    type: "OPEN_DOOR"
+    length: 8.0
+    width: 1.2
+  
+  # South patient rooms
+  - src: 2
+    dst: 10
+    type: "OPEN_DOOR"
+    length: 8.0
+    width: 1.2
+  
+  - src: 2
+    dst: 11
+    type: "OPEN_DOOR"
+    length: 8.0
+    width: 1.2
+  
+  - src: 4
+    dst: 12
+    type: "OPEN_DOOR"
+    length: 8.0
+    width: 1.2
+  
+  - src: 4
+    dst: 13
+    type: "OPEN_DOOR"
+    length: 8.0
+    width: 1.2
+  
+  # Waiting area
+  - src: 3
+    dst: 14
+    type: "OPEN_DOOR"
+    length: 15.0
+    width: 2.0
+
+evacuees:
+  # Patient rooms - high priority, many need assistance
+  - id: 0
+    age_group: "elderly"
+    health: "mobility_disability"
+    node: 6
+  
+  - id: 1
+    age_group: "senior"
+    health: "illness"
+    node: 7
+  
+  - id: 2
+    age_group: "adult"
+    health: "incapacitated"
+    node: 8
+  
+  - id: 3
+    age_group: "elderly"
+    health: "requiring_assistance"
+    node: 9
+  
+  - id: 4
+    age_group: "senior"
+    health: "unfit"
+    node: 10
+  
+  - id: 5
+    age_group: "adult"
+    health: "illness"
+    node: 11
+  
+  - id: 6
+    age_group: "elderly"
+    health: "mobility_disability"
+    node: 12
+  
+  - id: 7
+    age_group: "senior"
+    health: "healthy"
+    node: 13
+  
+  # Waiting area - visitors
+  - id: 8
+    age_group: "adult"
+    health: "healthy"
+    node: 14
+  
+  - id: 9
+    age_group: "young_adult"
+    health: "fit"
+    node: 14
+  
+  - id: 10
+    age_group: "children"
+    health: "healthy"
+    node: 14
+  
+  # Nurse station - staff
+  - id: 11
+    age_group: "adult"
+    health: "fit"
+    node: 5
+  
+  - id: 12
+    age_group: "adult"
+    health: "healthy"
+    node: 5
+

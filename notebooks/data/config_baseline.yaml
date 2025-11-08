@@ -1,0 +1,42 @@
+# Baseline Configuration for Evacuation Simulation
+
+agents:
+  - id: 0
+    role: "SCOUT"
+    node: 0
+    sweep_mode: "right"
+    personal_priority: 4
+  
+  - id: 1
+    role: "SECURER"
+    node: 0
+    sweep_mode: "right"
+    personal_priority: 3
+  
+  - id: 2
+    role: "CHECKPOINTER"
+    node: 0
+    sweep_mode: "corridor"
+    personal_priority: 3
+  
+  - id: 3
+    role: "EVACUATOR"
+    node: 0
+    sweep_mode: "left"
+    personal_priority: 2
+
+weights:
+  room_priority: 1.5
+  sector_priority: 1.0
+  distance: 0.5
+  hazard_penalty: 2.0
+  unchecked_penalty: 3.0
+
+# Initially known nodes (entry point and visible corridors)
+known_nodes: [0, 1]
+
+simulation:
+  tmax: 600  # 10 minutes max
+  record_interval: 3.0  # record state every 3 seconds
+  seed: 42
+

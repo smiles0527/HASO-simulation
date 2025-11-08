@@ -1,0 +1,241 @@
+# Simple Office Building Layout
+# Single floor with corridors, offices, and one exit
+
+building:
+  type: "office"
+  num_floors: 1
+
+nodes:
+  # Exit
+  - id: 0
+    type: "EXIT"
+    floor: 0
+    x: 0
+    y: 0
+    name: "Main Entrance"
+    room_priority: 1
+    sector_id: 0
+    search_time: 1.0
+  
+  # Main Corridor
+  - id: 1
+    type: "CORRIDOR"
+    floor: 0
+    x: 10
+    y: 0
+    name: "Main Corridor"
+    area: 20
+    room_priority: 5
+    sector_id: 0
+    search_time: 2.0
+  
+  - id: 2
+    type: "CORRIDOR"
+    floor: 0
+    x: 20
+    y: 0
+    name: "Central Corridor"
+    area: 20
+    room_priority: 5
+    sector_id: 0
+    search_time: 2.0
+  
+  - id: 3
+    type: "CORRIDOR"
+    floor: 0
+    x: 30
+    y: 0
+    name: "East Corridor"
+    area: 20
+    room_priority: 5
+    sector_id: 1
+    search_time: 2.0
+  
+  # North Wing - Small Offices
+  - id: 4
+    type: "SMALL_ROOM"
+    floor: 0
+    x: 10
+    y: 8
+    name: "Office 101"
+    area: 15
+    room_priority: 3
+    sector_id: 0
+    search_time: 5.0
+  
+  - id: 5
+    type: "SMALL_ROOM"
+    floor: 0
+    x: 20
+    y: 8
+    name: "Office 102"
+    area: 15
+    room_priority: 3
+    sector_id: 0
+    search_time: 5.0
+  
+  - id: 6
+    type: "SMALL_ROOM"
+    floor: 0
+    x: 30
+    y: 8
+    name: "Office 103"
+    area: 15
+    room_priority: 3
+    sector_id: 1
+    search_time: 5.0
+    hazard: "SMOKE"
+    hazard_severity: 0.4
+  
+  # South Wing - Offices
+  - id: 7
+    type: "SMALL_ROOM"
+    floor: 0
+    x: 10
+    y: -8
+    name: "Office 104"
+    area: 15
+    room_priority: 4
+    sector_id: 0
+    search_time: 5.0
+  
+  - id: 8
+    type: "CONNECTED_LARGE_ROOM"
+    floor: 0
+    x: 20
+    y: -8
+    name: "Conference Room"
+    area: 40
+    room_priority: 2
+    sector_id: 0
+    sector_priority: 2
+    search_time: 10.0
+  
+  - id: 9
+    type: "SMALL_ROOM"
+    floor: 0
+    x: 30
+    y: -8
+    name: "Office 105"
+    area: 15
+    room_priority: 4
+    sector_id: 1
+    search_time: 5.0
+  
+  # East Wing - Large Room
+  - id: 10
+    type: "LARGE_SIDE_ROOM"
+    floor: 0
+    x: 40
+    y: 0
+    name: "Open Work Area"
+    area: 60
+    room_priority: 2
+    sector_id: 1
+    sector_priority: 1
+    search_time: 15.0
+
+edges:
+  # Exit to main corridor
+  - src: 0
+    dst: 1
+    type: "OPEN_DOOR"
+    length: 10.0
+    width: 2.0
+  
+  # Corridor connections
+  - src: 1
+    dst: 2
+    type: "HALLWAY"
+    length: 10.0
+    width: 2.5
+  
+  - src: 2
+    dst: 3
+    type: "HALLWAY"
+    length: 10.0
+    width: 2.5
+  
+  # North wing connections
+  - src: 1
+    dst: 4
+    type: "OPEN_DOOR"
+    length: 8.0
+    width: 1.2
+  
+  - src: 2
+    dst: 5
+    type: "OPEN_DOOR"
+    length: 8.0
+    width: 1.2
+  
+  - src: 3
+    dst: 6
+    type: "CLOSED_DOOR"
+    length: 8.0
+    width: 1.2
+    is_open: false
+    open_time: 2.0
+  
+  # South wing connections
+  - src: 1
+    dst: 7
+    type: "OPEN_DOOR"
+    length: 8.0
+    width: 1.2
+  
+  - src: 2
+    dst: 8
+    type: "OPEN_DOOR"
+    length: 8.0
+    width: 1.5
+  
+  - src: 3
+    dst: 9
+    type: "OPEN_DOOR"
+    length: 8.0
+    width: 1.2
+  
+  # East wing
+  - src: 3
+    dst: 10
+    type: "OPEN_DOOR"
+    length: 10.0
+    width: 2.0
+
+evacuees:
+  - id: 0
+    age_group: "adult"
+    health: "healthy"
+    node: 5
+  
+  - id: 1
+    age_group: "senior"
+    health: "mobility_disability"
+    node: 8
+  
+  - id: 2
+    age_group: "young_adult"
+    health: "fit"
+    node: 8
+  
+  - id: 3
+    age_group: "adult"
+    health: "requiring_assistance"
+    node: 6
+  
+  - id: 4
+    age_group: "elderly"
+    health: "unfit"
+    node: 10
+  
+  - id: 5
+    age_group: "adult"
+    health: "healthy"
+    node: 10
+  
+  - id: 6
+    age_group: "adolescent"
+    health: "healthy"
+    node: 4
+
