@@ -63,6 +63,20 @@ from .visualize import (
     create_summary_dashboard,
 )
 
+# HASO modules
+from .zone_optimizer import (
+    partition_building_zones,
+    assign_responders_to_zones,
+    reallocate_zone_dynamic,
+)
+
+from .task_allocator import (
+    optimize_zone_assignment_ilp,
+    calculate_redundancy_index,
+    calculate_risk_exposure,
+    calculate_efficiency_ratio,
+)
+
 __all__ = [
     # Graph model
     "Graph",
@@ -105,5 +119,13 @@ __all__ = [
     "plot_agent_paths",
     "animate_run",
     "create_summary_dashboard",
+    # HASO
+    "partition_building_zones",
+    "assign_responders_to_zones",
+    "reallocate_zone_dynamic",
+    "optimize_zone_assignment_ilp",
+    "calculate_redundancy_index",
+    "calculate_risk_exposure",
+    "calculate_efficiency_ratio",
 ]
 

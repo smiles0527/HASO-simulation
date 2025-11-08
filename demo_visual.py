@@ -1,10 +1,12 @@
 """
-VISUAL DEMO - See the simulation in action with plots. This script runs a simulation and creates visualizations.
+Basic Visualization System - Standard evacuation simulation visualizations.
 
+Generates building layout, clearance progress, agent paths, and dashboard.
+For HASO-specific network diagrams, use haso_visualizer.py instead.
 """
 
 print("\n" + "="*70)
-print("EMERGENCY EVACUATION SIMULATOR - VISUAL DEMO")
+print("EVACUATION SIMULATION - VISUALIZATION SYSTEM")
 print("="*70 + "\n")
 
 print("Loading simulation framework...")
@@ -18,7 +20,7 @@ from notebooks.src import (
 )
 import matplotlib.pyplot as plt
 
-print("[OK] Framework loaded!\n")
+print("Framework loaded successfully.\n")
 
 # Run simulation
 print("Running simulation (this may take 10-30 seconds)...")
@@ -35,7 +37,7 @@ results = simulate(
 world = results['world']
 cleared, total = world.G.get_cleared_count()
 
-print("[OK] Simulation complete!\n")
+print("Simulation complete.\n")
 print(f"Time: {world.time:.1f}s ({world.time/60:.1f} minutes)")
 print(f"Rooms cleared: {cleared}/{total} ({cleared/total*100:.1f}%)")
 print()
@@ -85,11 +87,11 @@ try:
     create_summary_dashboard(world, save_path='demo_results/4_complete_dashboard.png')
     print("      Saved: demo_results/4_complete_dashboard.png")
     
-    print("\n[OK] All visualizations created!\n")
+    print("\nAll visualizations created successfully.\n")
     
     # Show plots
     print("="*70)
-    print("VISUALIZATIONS READY!")
+    print("VISUALIZATIONS GENERATED")
     print("="*70)
     print()
     print("Files saved in 'demo_results/' folder:")
@@ -98,8 +100,7 @@ try:
     print("  3. 3_agent_paths.png           - Where agents moved")
     print("  4. 4_complete_dashboard.png    - Full summary dashboard")
     print()
-    print("Opening plots now...")
-    print("(Close the plot windows to continue)")
+    print("Opening dashboard...")
     print()
     
     # Show the dashboard
@@ -107,36 +108,19 @@ try:
     fig, ax = plt.subplots(figsize=(18, 12))
     ax.imshow(img)
     ax.axis('off')
-    ax.set_title('Emergency Evacuation Simulation Dashboard', 
+    ax.set_title('Evacuation Simulation Dashboard', 
                  fontsize=18, weight='bold', pad=20)
     plt.tight_layout()
-    plt.show()
+    plt.show(block=True)
     
 except Exception as e:
-    print(f"[WARNING] Could not create visualizations: {e}")
-    print("This is okay - the simulation still worked!")
-    print("Try running: pip install matplotlib")
+    print(f"Error during visualization: {e}")
+    import traceback
+    traceback.print_exc()
 
 print()
 print("="*70)
-print("NEXT STEPS:")
-print("="*70)
-print()
-print("1. Try the HOSPITAL scenario:")
-print("   python demo_visual.py")
-print("   (then edit line 23 to use 'hospital_wing.yaml')")
-print()
-print("2. Open Jupyter for interactive analysis:")
-print("   jupyter lab")
-print("   Then open: notebooks/simulation_demo.ipynb")
-print()
-print("3. Create your own building map:")
-print("   Copy notebooks/data/office_building_simple.yaml")
-print("   Modify the nodes and edges")
-print("   Run simulation with your map!")
-print()
-print("="*70)
-print("[SUCCESS] Demo complete! Check the demo_results folder!")
+print("Visualization Complete")
 print("="*70)
 print()
 

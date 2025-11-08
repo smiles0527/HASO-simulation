@@ -112,13 +112,13 @@ def analyze_agent_performance(agent) -> Dict[str, Any]:
 
 def analyze_simulation_results(world) -> Dict[str, Any]:
     """
-    Analyze overall simulation results.
+    Analyze overall simulation results with HASO metrics.
     
     Args:
         world: World object after simulation
     
     Returns:
-        Dictionary of analysis results
+        Dictionary of analysis results including HASO metrics
     """
     cleared, total = world.G.get_cleared_count()
     
@@ -127,6 +127,21 @@ def analyze_simulation_results(world) -> Dict[str, Any]:
     total_distance = sum(a.distance_traveled for a in world.agents)
     total_rooms = sum(a.rooms_cleared for a in world.agents)
     total_evacuees = sum(a.evacuees_assisted for a in world.agents)
+    
+    # HASO metrics
+    try:
+        from .task_allocator import (
+            calculate_redundancy_index,
+            calculate_risk_exposure,
+            calculate_efficiency_ratio
+        )
+        redundancy_index = calculate_redundancy_index(world.G)
+        risk_exposure = calculate_risk_exposure(world.G)
+        efficiency_ratio = calculate_efficiency_ratio(cleared, world.time)
+    except:
+        redundancy_index = 0.0
+        risk_exposure = 0.0
+        efficiency_ratio = 0.0
     
     return {
         "simulation_time": round(world.time, 2),
@@ -138,6 +153,10 @@ def analyze_simulation_results(world) -> Dict[str, Any]:
         "total_evacuees_assisted": total_evacuees,
         "agent_performance": agent_stats,
         "efficiency_metric": round(cleared / (world.time / 60.0), 2) if world.time > 0 else 0,  # rooms/minute
+        # HASO metrics
+        "haso_redundancy_index": round(redundancy_index, 3),  # R
+        "haso_risk_exposure": round(risk_exposure, 3),  # E
+        "haso_efficiency_ratio": round(efficiency_ratio, 4),  # η
     }
 
 
@@ -167,6 +186,12 @@ def generate_summary_report(world) -> str:
     report.append(f"  Rooms Cleared: {analysis['rooms_cleared']} / {analysis['total_rooms']} ({analysis['clearance_rate']:.1f}%)")
     report.append(f"  Evacuees Assisted: {analysis['total_evacuees_assisted']}")
     report.append(f"  Efficiency: {analysis['efficiency_metric']:.2f} rooms/minute")
+    report.append("")
+    
+    report.append("HASO METRICS:")
+    report.append(f"  Efficiency Ratio (eta): {analysis['haso_efficiency_ratio']:.4f} rooms/second")
+    report.append(f"  Redundancy Index (R):   {analysis['haso_redundancy_index']:.3f}")
+    report.append(f"  Risk Exposure (E):      {analysis['haso_risk_exposure']:.3f}")
     report.append("")
     
     report.append("RESPONDER PERFORMANCE:")

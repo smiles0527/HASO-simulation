@@ -117,10 +117,21 @@ class Node:
     hazard_severity: float = 0.0  # 0.0 to 1.0
     evacuees: List[Evacuee] = field(default_factory=list)
     
+    # HASO: Dynamic properties
+    visibility: float = 1.0      # 0.0 (no visibility) to 1.0 (full visibility)
+    occupancy_probability: float = 0.0  # Probability of occupants present
+    fire_spread_rate: float = 0.0  # Fire propagation coefficient k
+    smoke_decay_rate: float = 0.05  # Visibility decay γ
+    
     # Search/clearance properties
     search_time: float = 5.0     # base time to search this node (seconds)
     cleared: bool = False
     cleared_by: Optional[int] = None  # agent ID
+    verified_by: Optional[int] = None  # HASO: dual verification
+    clearance_timestamp: float = 0.0  # When was it cleared
+    
+    # HASO: Zone assignment
+    zone_id: int = -1  # Which zone this node belongs to
     
     # Fog of war: 0=unknown-unknown, 1=known-unknown, 2=unknown-known, 3=known-known
     fog_state: int = 0

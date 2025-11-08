@@ -108,6 +108,12 @@ class Agent:
     base_speed: float = 1.5     # m/s
     vision_range: int = 1       # how many edges away can see
     
+    # HASO: Agent parameters
+    communication_reliability: float = 0.95  # c_r
+    vision_radius: float = 5.0  # r_v in meters
+    priority_heuristic: float = 1.0  # π weighting factor
+    assigned_zone: int = -1  # Zone assignment from macro-level planner
+    
     # Task and path
     target_node: Optional[int] = None
     path: List[int] = field(default_factory=list)

@@ -88,6 +88,15 @@ def build_world(map_path: str, config_path: str | None = None, *, seed: int = 0)
     # Initialize fog-of-war
     known_nodes = cfg.get("known_nodes", [0])
     world.init_fog(known_nodes=known_nodes)
+    
+    # HASO: Initialize zone partitioning
+    use_haso = cfg.get("use_haso", True)  # HASO enabled by default
+    if use_haso and len(agents) > 0:
+        try:
+            world.init_zones(num_zones=len(agents))
+        except Exception as e:
+            print(f"[Warning] HASO zone initialization failed: {e}")
+            print("[Info] Continuing without zone partitioning")
 
     # Attach policies (expected to schedule first ticks externally)
     world.policies = make_default_policies(world)  # type: ignore[attr-defined]

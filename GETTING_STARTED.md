@@ -1,3 +1,5 @@
+# NOTE: THIS FILE IS AI GENERATED
+
 # Getting Started with Emergency Evacuation Sweep Simulator
 
 ## Quick Setup (5 minutes)
@@ -245,12 +247,12 @@ matplotlib.use('Agg')  # Use non-interactive backend
 
 ## Next Steps
 
-1. ✅ Run the demo notebook
-2. ✅ Try different building layouts
-3. ✅ Experiment with agent configurations
-4. ✅ Compare sweep strategies
-5. ✅ Analyze optimization opportunities
-6. ✅ Extend with custom features
+1. Run the demo notebook
+2. Try different building layouts
+3. Experiment with agent configurations
+4. Compare sweep strategies
+5. Analyze optimization opportunities
+6. Extend with custom features
 
 ## Need Help?
 

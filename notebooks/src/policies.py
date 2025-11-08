@@ -331,8 +331,11 @@ def _move_agent_to(world: World, agent: Agent, target: int) -> None:
         agent.log_action(f"Cannot move (status: {agent.status.name})")
         return
     
-    # Find path
-    path = world.shortest_path_known(agent.node, target)
+    # Find path using HASO if available, otherwise fallback to basic
+    try:
+        path = world.shortest_path_haso(agent.node, target)
+    except:
+        path = world.shortest_path_known(agent.node, target)
     
     if path and len(path) >= 2:
         next_node = path[1]  # path[0] is current node

@@ -1,6 +1,8 @@
-# 🚀 How to Run the Simulation - Step by Step
+# NOTE: THIS FILE IS AI GENERATED
 
-## Method 1: Quick Test (30 seconds) ⚡
+# How to Run the Simulation - Step by Step
+
+## Method 1: Quick Test (30 seconds)
 
 **Open your terminal in this folder and run:**
 
@@ -9,39 +11,39 @@ python test_simulation.py
 ```
 
 This will:
-- ✅ Test all imports
-- ✅ Load the office building map
-- ✅ Run a 30-second simulation
-- ✅ Show results
+- Test all imports
+- Load the office building map
+- Run a 30-second simulation
+- Show results
 
-**Expected output:** You'll see agent movement and simulation results!
+**Expected output:** You'll see agent movement and simulation results.
 
 ---
 
-## Method 2: Full Simulation (5 minutes) 📊
+## Method 2: Full Simulation (5 minutes)
 
 ```bash
 python test_full_simulation.py
 ```
 
 This will:
-- ✅ Run a complete 5-minute evacuation
-- ✅ Show detailed agent performance
-- ✅ Display which rooms were cleared
+- Run a complete 5-minute evacuation
+- Show detailed agent performance
+- Display which rooms were cleared
 
 ---
 
-## Method 3: Visual Demo (with plots!) 🎨
+## Method 3: Visual Demo (with plots)
 
 ```bash
 python demo_visual.py
 ```
 
 This will:
-- ✅ Run the simulation
-- ✅ Create 4 visualization files in `demo_results/`
-- ✅ Show an interactive dashboard
-- ✅ Display graphs of progress
+- Run the simulation
+- Create 4 visualization files in `demo_results/`
+- Show an interactive dashboard
+- Display graphs of progress
 
 **Output files:**
 - `1_building_layout.png` - Building map
@@ -51,9 +53,9 @@ This will:
 
 ---
 
-## Method 4: Interactive Jupyter Notebook (BEST!) 📓
+## Method 4: Interactive Jupyter Notebook (Recommended)
 
-This is the **recommended way** to explore the simulation!
+This is the recommended way to explore the simulation.
 
 ### Step 1: Install Jupyter Lab
 ```bash
@@ -75,14 +77,14 @@ notebooks/simulation_demo.ipynb
 Click **Cell → Run All** or press `Shift+Enter` on each cell
 
 You'll see:
-- 🗺️ Building visualizations
-- 🤖 Agent movements
-- 📈 Performance graphs
-- 📊 Statistical analysis
+- Building visualizations
+- Agent movements
+- Performance graphs
+- Statistical analysis
 
 ---
 
-## Method 5: Python Script (Custom) 🐍
+## Method 5: Python Script (Custom)
 
 Create a file called `my_simulation.py`:
 
@@ -115,7 +117,7 @@ python my_simulation.py
 
 ---
 
-## Method 6: Python Interactive Shell 💻
+## Method 6: Python Interactive Shell
 
 ```bash
 python
@@ -133,7 +135,7 @@ Then type:
 
 ---
 
-## 🎯 Recommended Path for Beginners
+## Recommended Path for Beginners
 
 1. **First time?** Run: `python test_simulation.py`
 2. **Want visuals?** Run: `python demo_visual.py`
@@ -142,7 +144,7 @@ Then type:
 
 ---
 
-## 📁 Files You Can Modify
+## Files You Can Modify
 
 ### Building Maps:
 - `notebooks/data/office_building_simple.yaml` - Small office (11 nodes, 7 rooms)
@@ -160,7 +162,7 @@ Then type:
 
 ---
 
-## 🆘 Troubleshooting
+## Troubleshooting
 
 ### Error: "Module not found"
 ```bash
@@ -185,7 +187,7 @@ This is normal for very short simulations (< 60 seconds). Try:
 
 ---
 
-## 📺 What You'll See
+## What You'll See
 
 When you run a simulation, you'll see output like:
 
@@ -204,7 +206,7 @@ Efficiency: 0.60 rooms/minute
 
 ---
 
-## 🎓 Next Steps
+## Next Steps
 
 After running your first simulation:
 
@@ -217,7 +219,7 @@ After running your first simulation:
 
 ---
 
-## 💡 Quick Tips
+## Quick Tips
 
 - **Start small**: Use `office_building_simple.yaml` first
 - **Use Jupyter**: Best for visualization and experimentation
@@ -227,9 +229,9 @@ After running your first simulation:
 
 ---
 
-## 🏆 Ready to Go!
+## Ready to Go
 
-You have everything you need! Pick a method above and start simulating!
+You have everything you need. Pick a method above and start simulating.
 
 **Fastest start:**
 ```bash
@@ -243,8 +245,4 @@ jupyter lab
 ```
 
 **Need help?** See `README.md` or `GETTING_STARTED.md`
-
----
-
-Happy Simulating! 🚨🏢👥
 
