@@ -25,17 +25,17 @@ __all__ = [
 
 # ---- Re-exports (thin, intentional surface) ----------------------------------
 # Graph & map I/O
-from .graph_model import Graph, Node, Edge, load_map_yaml as load_map  # load_map(path) -> Graph
+from .src.graph_model import Graph, Node, Edge, load_map_yaml as load_map  # load_map(path) -> Graph
 
 # Core simulation
-from .world import World
-from .agents import Agent, Role, Status
-from .policies import make_default_policies  # expected to return a dict role->callable
-from .utils import load_config  # optional; returns dict or {} if None
+from .src.world import World
+from .src.agents import Agent, Role, Status
+from .src.policies import make_default_policies  # expected to return a dict role->callable
+from .src.utils import load_config  # optional; returns dict or {} if None
 
 # Optional visualization (soft import)
 try:
-    from .visualize import animate_run  # animate_run(world, history, out_path=None)
+    from .src.visualize import animate_run  # animate_run(world, history, out_path=None)
 except Exception:  # pragma: no cover
     animate_run = None
 
@@ -130,7 +130,7 @@ def simulate(
 
     # Kick off policies: each agent gets a zero-delay tick
     if hasattr(world, "agents") and hasattr(world, "schedule"):
-        from .policies import tick_policy  # local import to avoid polluting namespace
+        from .src.policies import tick_policy  # local import to avoid polluting namespace
         for a in world.agents:
             world.schedule(0, tick_policy, world, a)
 
