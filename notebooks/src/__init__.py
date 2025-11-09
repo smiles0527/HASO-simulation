@@ -77,6 +77,17 @@ from .task_allocator import (
     calculate_efficiency_ratio,
 )
 
+from .flow_dynamics import (
+    FlowDynamics,
+    calculate_bottleneck_factor,
+    suggest_optimal_routes,
+)
+
+from .animate_live import (
+        LiveSimulationDashboard,
+    create_live_visualization,
+)
+
 __all__ = [
     # Graph model
     "Graph",
@@ -96,7 +107,7 @@ __all__ = [
     # World
     "World",
     "FogOfWar",
-    "Event",
+    "Event",its
     # Policies
     "make_default_policies",
     "tick_policy",
@@ -127,5 +138,12 @@ __all__ = [
     "calculate_redundancy_index",
     "calculate_risk_exposure",
     "calculate_efficiency_ratio",
+    # Flow Dynamics
+    "FlowDynamics",
+    "calculate_bottleneck_factor",
+    "suggest_optimal_routes",
+    # Live Animation
+    "LiveSimulationDashboard",
+    "create_live_visualization",
 ]
 

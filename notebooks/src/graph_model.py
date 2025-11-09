@@ -29,17 +29,131 @@ class NodeType(Enum):
 
 
 class EdgeType(Enum):
-    """Types of edges (connections) between nodes."""
+    """
+    Types of edges (connections) between nodes with physical properties.
+    
+    Properties encoded:
+    - Traversability: Can agents pass through?
+    - Vision: Does it block or provide line of sight?
+    - Speed: Does it slow movement?
+    - Openable: Can it be opened (doors)?
+    - Breakable: Can it be broken through?
+    """
     OPEN_AREA = auto()          # traversable, gives vision
     HALLWAY = auto()            # traversable, gives vision
-    DESKS = auto()              # traversable, gives vision, slows
+    DESKS = auto()              # traversable, gives vision, slows 40%
     TALL_SHELVES = auto()       # non-traversable, blocks vision
     OPEN_DOOR = auto()          # traversable, blocks vision
-    CLOSED_DOOR = auto()        # non-traversable, blocks vision, can be opened
-    LOCKED_DOOR = auto()        # non-traversable, blocks vision, needs breaking
+    CLOSED_DOOR = auto()        # non-traversable initially, blocks vision, can be opened (2s)
+    LOCKED_DOOR = auto()        # non-traversable, blocks vision, can be broken (10s)
     WALL = auto()               # non-traversable/no link
-    RADIO_CAMERA = auto()       # non-traversable, gives vision
+    RADIO_CAMERA = auto()       # non-traversable, provides vision remotely
     STAIRS = auto()             # traversable, slower
+
+
+# Edge type property definitions
+EDGE_TYPE_PROPERTIES = {
+    EdgeType.OPEN_AREA: {
+        'base_traversable': True,
+        'blocks_vision': False,
+        'speed_modifier': 1.0,
+        'can_open': False,
+        'can_break': False,
+        'open_time': 0.0,
+        'break_time': 0.0,
+        'provides_remote_vision': False,
+    },
+    EdgeType.HALLWAY: {
+        'base_traversable': True,
+        'blocks_vision': False,
+        'speed_modifier': 1.0,
+        'can_open': False,
+        'can_break': False,
+        'open_time': 0.0,
+        'break_time': 0.0,
+        'provides_remote_vision': False,
+    },
+    EdgeType.DESKS: {
+        'base_traversable': True,
+        'blocks_vision': False,
+        'speed_modifier': 0.6,  # 40% slower navigating around desks
+        'can_open': False,
+        'can_break': False,
+        'open_time': 0.0,
+        'break_time': 0.0,
+        'provides_remote_vision': False,
+    },
+    EdgeType.TALL_SHELVES: {
+        'base_traversable': False,
+        'blocks_vision': True,
+        'speed_modifier': 0.0,
+        'can_open': False,
+        'can_break': False,
+        'open_time': 0.0,
+        'break_time': 0.0,
+        'provides_remote_vision': False,
+    },
+    EdgeType.OPEN_DOOR: {
+        'base_traversable': True,
+        'blocks_vision': True,  # Can't see through doorway even when open
+        'speed_modifier': 0.9,  # Slight slowdown passing through
+        'can_open': False,  # Already open
+        'can_break': False,
+        'open_time': 0.0,
+        'break_time': 0.0,
+        'provides_remote_vision': False,
+    },
+    EdgeType.CLOSED_DOOR: {
+        'base_traversable': False,  # Until opened
+        'blocks_vision': True,
+        'speed_modifier': 0.9,  # Once opened
+        'can_open': True,
+        'can_break': True,
+        'open_time': 2.0,  # 2 seconds to open
+        'break_time': 5.0,  # 5 seconds to break if needed
+        'provides_remote_vision': False,
+    },
+    EdgeType.LOCKED_DOOR: {
+        'base_traversable': False,
+        'blocks_vision': True,
+        'speed_modifier': 0.9,  # Once broken
+        'can_open': False,  # Cannot be opened normally
+        'can_break': True,
+        'open_time': 0.0,
+        'break_time': 10.0,  # 10 seconds to break through
+        'provides_remote_vision': False,
+    },
+    EdgeType.WALL: {
+        'base_traversable': False,
+        'blocks_vision': True,
+        'speed_modifier': 0.0,
+        'can_open': False,
+        'can_break': False,
+        'open_time': 0.0,
+        'break_time': 0.0,
+        'provides_remote_vision': False,
+    },
+    EdgeType.RADIO_CAMERA: {
+        'base_traversable': False,  # Can't walk through camera/radio
+        'blocks_vision': False,  # Does not block vision
+        'speed_modifier': 0.0,
+        'can_open': False,
+        'can_break': False,
+        'open_time': 0.0,
+        'break_time': 0.0,
+        'provides_remote_vision': True,  # Provides vision to connected nodes
+    },
+    EdgeType.STAIRS: {
+        'base_traversable': True,
+        'blocks_vision': False,
+        'speed_modifier': 0.7,  # 30% slower on stairs
+        'can_open': False,
+        'can_break': False,
+        'open_time': 0.0,
+        'break_time': 0.0,
+        'provides_remote_vision': False,
+    },
+}
 
 
 class HazardType(Enum):
@@ -150,7 +264,11 @@ class Node:
 
 @dataclass
 class Edge:
-    """Represents an edge (connection) between two nodes."""
+    """
+    Represents an edge (connection) between two nodes with physical obstacle properties.
+    
+    Supports dynamic state changes (opening doors, breaking through obstacles).
+    """
     src: int
     dst: int
     edge_type: EdgeType = EdgeType.HALLWAY
@@ -159,16 +277,94 @@ class Edge:
     length: float = 5.0         # meters
     width: float = 1.5          # meters (for flow calculations)
     
-    # Traversal properties
+    # Traversal properties (dynamically updated from edge_type)
     traversable: bool = True
     gives_vision: bool = True
     
-    # Time costs
-    open_time: float = 0.0      # time to open if closed (seconds)
-    break_time: float = 0.0     # time to break through if locked (seconds)
+    # Dynamic state
+    is_open: bool = True        # For doors: currently open?
+    is_broken: bool = False     # Has it been broken through?
+    opened_by: Optional[int] = None  # Agent ID who opened/broke it
+    opened_at: float = 0.0      # Timestamp when opened/broken
     
-    # State
-    is_open: bool = True
+    def __post_init__(self):
+        """Initialize properties from edge_type."""
+        props = self.get_properties()
+        # Set initial state from edge type
+        if self.edge_type in [EdgeType.CLOSED_DOOR, EdgeType.LOCKED_DOOR]:
+            self.is_open = False
+            self.traversable = False
+        else:
+            self.traversable = props['base_traversable']
+        self.gives_vision = not props['blocks_vision']
+    
+    def get_properties(self) -> Dict[str, any]:
+        """Get properties of this edge's type."""
+        return EDGE_TYPE_PROPERTIES.get(self.edge_type, EDGE_TYPE_PROPERTIES[EdgeType.HALLWAY])
+    
+    def can_traverse(self) -> bool:
+        """Check if edge can currently be traversed."""
+        props = self.get_properties()
+        
+        # Check base traversability
+        if not props['base_traversable']:
+            # For doors, check if opened or broken
+            if self.edge_type in [EdgeType.CLOSED_DOOR, EdgeType.LOCKED_DOOR]:
+                return self.is_open or self.is_broken
+            return False
+        
+        return True
+    
+    def can_open_edge(self) -> bool:
+        """Check if this edge can be opened."""
+        props = self.get_properties()
+        return props['can_open'] and not self.is_open and not self.is_broken
+    
+    def can_break_edge(self) -> bool:
+        """Check if this edge can be broken through."""
+        props = self.get_properties()
+        return props['can_break'] and not self.is_broken
+    
+    def get_open_time(self) -> float:
+        """Time required to open (e.g., a door)."""
+        props = self.get_properties()
+        return props['open_time']
+    
+    def get_break_time(self) -> float:
+        """Time required to break through."""
+        props = self.get_properties()
+        return props['break_time']
+    
+    def open_edge(self, agent_id: int, current_time: float) -> bool:
+        """
+        Attempt to open this edge (e.g., open a door).
+        
+        Returns:
+            True if successfully opened, False otherwise
+        """
+        if self.can_open_edge():
+            self.is_open = True
+            self.traversable = True
+            self.opened_by = agent_id
+            self.opened_at = current_time
+            return True
+        return False
+    
+    def break_edge(self, agent_id: int, current_time: float) -> bool:
+        """
+        Attempt to break through this edge.
+        
+        Returns:
+            True if successfully broken, False otherwise
+        """
+        if self.can_break_edge():
+            self.is_broken = True
+            self.traversable = True
+            self.is_open = True  # Effectively open once broken
+            self.opened_by = agent_id
+            self.opened_at = current_time
+            return True
+        return False
     
     def get_traversal_time(self, base_speed: float = 1.5, hazard_modifier: float = 1.0) -> float:
         """
@@ -181,31 +377,26 @@ class Edge:
         Returns:
             Time in seconds to traverse this edge
         """
-        if not self.traversable or not self.is_open:
+        if not self.can_traverse():
             return float('inf')
         
-        # Base traversal time
-        speed = base_speed * hazard_modifier
+        # Get obstacle speed modifier
+        props = self.get_properties()
+        obstacle_modifier = props['speed_modifier']
+        
+        # Calculate effective speed
+        speed = base_speed * hazard_modifier * obstacle_modifier
         
         # Prevent division by zero
         if speed <= 0:
             return float('inf')
-        
-        # Edge type modifiers
-        if self.edge_type == EdgeType.DESKS:
-            speed *= 0.7
-        elif self.edge_type == EdgeType.STAIRS:
-            speed *= 0.5
-        elif self.edge_type == EdgeType.OPEN_DOOR:
-            # Add small overhead for door passage
-            return self.length / speed + 0.5
         
         return self.length / speed
     
     @property
     def can_open(self) -> bool:
         """Check if edge can be opened (for closed/locked doors)."""
-        return self.edge_type in [EdgeType.CLOSED_DOOR, EdgeType.LOCKED_DOOR]
+        return self.can_open_edge()
 
 
 class Graph:
@@ -246,10 +437,6 @@ class Graph:
             edge_type=edge.edge_type,
             length=edge.length,
             width=edge.width,
-            traversable=edge.traversable,
-            gives_vision=edge.gives_vision,
-            open_time=edge.open_time,
-            break_time=edge.break_time,
             is_open=edge.is_open,
         )
         self.edges[(edge.dst, edge.src)] = reverse
@@ -371,10 +558,7 @@ def load_map_yaml(path: str) -> Graph:
             edge_type=EdgeType[edge_data.get('type', 'HALLWAY').upper()],
             length=edge_data.get('length', 5.0),
             width=edge_data.get('width', 1.5),
-            traversable=edge_data.get('traversable', True),
-            gives_vision=edge_data.get('gives_vision', True),
-            open_time=edge_data.get('open_time', 0.0),
-            break_time=edge_data.get('break_time', 0.0),
+            # traversable and gives_vision are set from edge_type in __post_init__
             is_open=edge_data.get('is_open', True),
         )
         graph.add_edge(edge)

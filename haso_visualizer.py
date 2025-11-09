@@ -23,6 +23,8 @@ from notebooks.src import (
     generate_summary_report,
     analyze_simulation_results,
     Graph,
+    FlowDynamics,
+    suggest_optimal_routes,
 )
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
@@ -57,10 +59,19 @@ def create_network_diagram(world, save_path='demo_results/haso_network.png'):
     - Evacuee counts
     - Flow indicators
     - Exits marked
+    - Electrical flow dynamics (current, voltage, resistance)
     """
-    fig, ax = plt.subplots(figsize=(16, 10))
+    fig, ax = plt.subplots(figsize=(18, 12))
     
     G = world.G
+    
+    # Initialize flow dynamics model
+    flow_model = FlowDynamics(G)
+    
+    # Calculate flows for all edges
+    for (src, dst) in G.edges.keys():
+        flow = flow_model.calculate_flow_rate(src, dst)
+        flow_model.edge_flow[(src, dst)] = flow
     
     # Color scheme
     COLOR_EXIT = '#4A90E2'          # Blue - exits
@@ -81,15 +92,56 @@ def create_network_diagram(world, save_path='demo_results/haso_network.png'):
                 if node_src.evacuees:
                     flow = len([e for e in node_src.evacuees if e.evacuating]) * 0.1
                 
+                # Calculate electrical properties
+                edge_length = edge.length if hasattr(edge, 'length') else 10.0
+                edge_width = edge.width if hasattr(edge, 'width') else 1.5
+                resistance = flow_model.calculate_edge_resistance(edge, node_src, node_dst)
+                edge_flow_rate = flow_model.edge_flow.get((src, dst), 0.0)
+                
+                # Edge thickness based on conductance (1/R)
+                # Higher conductance = thicker line = better flow
+                conductance = 1.0 / resistance if resistance > 0 and resistance != float('inf') else 0.0
+                thickness = max(1, min(6, conductance * 3))
+                
+                # Edge color based on flow rate
+                # Blue = high flow, Gray = low/no flow
+                if edge_flow_rate > 0.5:
+                    edge_color = '#2196F3'  # Blue - high flow
+                    alpha = 0.8
+                elif edge_flow_rate > 0.1:
+                    edge_color = '#4CAF50'  # Green - moderate flow
+                    alpha = 0.6
+                else:
+                    edge_color = 'black'    # Black - minimal flow
+                    alpha = 0.4
+                
                 # Draw edge
                 ax.plot([node_src.x, node_dst.x], 
                        [node_src.y, node_dst.y],
-                       'k-', linewidth=3, alpha=0.4, zorder=1)
+                       edge_color, linewidth=thickness, alpha=alpha, zorder=1)
+                
+                # Add edge info label at midpoint
+                mid_x = (node_src.x + node_dst.x) / 2
+                mid_y = (node_src.y + node_dst.y) / 2
+                
+                # Show resistance and flow
+                info_text = f'{edge_length:.0f}m'
+                if resistance < 100:
+                    info_text += f'\nR={resistance:.1f}Ω'
+                if edge_flow_rate > 0.05:
+                    info_text += f'\nI={edge_flow_rate:.2f}A'
+                
+                if edge_length >= 10 or edge_flow_rate > 0.05:
+                    bg_color = 'lightcyan' if edge_flow_rate > 0.05 else 'lightyellow'
+                    ax.text(mid_x, mid_y, info_text,
+                           ha='center', va='center',
+                           fontsize=7, style='italic',
+                           bbox=dict(boxstyle='round,pad=0.3', 
+                                   facecolor=bg_color, alpha=0.8, edgecolor='black', linewidth=0.5),
+                           zorder=2)
                 
                 # Draw arrow to show flow direction
                 if flow > 0:
-                    mid_x = (node_src.x + node_dst.x) / 2
-                    mid_y = (node_src.y + node_dst.y) / 2
                     dx = node_dst.x - node_src.x
                     dy = node_dst.y - node_src.y
                     arrow = FancyArrowPatch(
@@ -129,6 +181,40 @@ def create_network_diagram(world, save_path='demo_results/haso_network.png'):
                   c=color, s=size, marker=marker_style,
                   edgecolors='black', linewidths=3, zorder=3)
         
+        # Add progress bar for nodes being secured
+        # Check if any agent is currently at this node
+        agents_here = [a for a in world.agents if a.node == node_id]
+        if agents_here and not node.cleared and node.node_type.name != 'EXIT':
+            # Calculate progress based on search time
+            # Assume nodes are being searched if agents are present
+            progress = 0.5  # 50% progress as an example
+            
+            # Draw progress bar above the node
+            bar_width = 4
+            bar_height = 0.5
+            bar_x = node.x - bar_width / 2
+            bar_y = node.y + 3.5
+            
+            # Background bar (gray)
+            bar_bg = mpatches.Rectangle((bar_x, bar_y), bar_width, bar_height,
+                                       facecolor='lightgray', edgecolor='black', 
+                                       linewidth=1, zorder=5)
+            ax.add_patch(bar_bg)
+            
+            # Progress bar (yellow to green gradient)
+            if progress > 0:
+                bar_color = '#FFC107' if progress < 0.7 else '#4CAF50'
+                bar_progress = mpatches.Rectangle((bar_x, bar_y), bar_width * progress, bar_height,
+                                                 facecolor=bar_color, edgecolor='none', zorder=6)
+                ax.add_patch(bar_progress)
+            
+            # Progress text
+            ax.text(node.x, bar_y + bar_height + 0.3, 
+                   f'{progress*100:.0f}%',
+                   ha='center', va='bottom',
+                   fontsize=8, fontweight='bold',
+                   color='black', zorder=6)
+        
         # Add node label (room number or '?' for unknown)
         if node.fog_state == 0:
             label_text = '?'
@@ -151,18 +237,31 @@ def create_network_diagram(world, save_path='demo_results/haso_network.png'):
             )
             ax.add_patch(arrow_exit)
         
-        # Add evacuee count below node
-        if node.evacuees:
-            evac_count = len(node.evacuees)
-            flow = len([e for e in node.evacuees if e.evacuating]) / max(1, evac_count)
-            offset = 8 if node.node_type.name == 'EXIT' else 4
-            ax.text(node.x, node.y - offset, 
-                   f"# Evacuees = {evac_count}\nFlow = {flow:.1f}",
-                   ha='center', va='top',
-                   fontsize=10,
-                   bbox=dict(boxstyle='round,pad=0.4', 
-                           facecolor='white', alpha=0.9, edgecolor='black'),
-                   zorder=5)
+        # Add evacuee count and voltage below node
+        if node.evacuees or node.node_type.name != 'EXIT':
+            info_lines = []
+            
+            if node.evacuees:
+                evac_count = len(node.evacuees)
+                flow_ratio = len([e for e in node.evacuees if e.evacuating]) / max(1, evac_count)
+                info_lines.append(f"# Evacuees = {evac_count}")
+                info_lines.append(f"Flow = {flow_ratio:.1f}")
+            
+            # Add voltage (pressure) for non-exit nodes
+            if node.node_type.name != 'EXIT':
+                voltage = flow_model.node_pressure.get(node_id, 0)
+                if voltage > 1.0:
+                    info_lines.append(f"V = {voltage:.1f}V")
+            
+            if info_lines:
+                offset = 8 if node.node_type.name == 'EXIT' else 4
+                ax.text(node.x, node.y - offset, 
+                       '\n'.join(info_lines),
+                       ha='center', va='top',
+                       fontsize=9,
+                       bbox=dict(boxstyle='round,pad=0.4', 
+                               facecolor='white', alpha=0.9, edgecolor='black'),
+                       zorder=5)
     
     # Add legend
     legend_elements = [
@@ -171,9 +270,13 @@ def create_network_diagram(world, save_path='demo_results/haso_network.png'):
         mpatches.Patch(facecolor=COLOR_CLEARED, edgecolor='black', label='Green - cleared'),
         mpatches.Patch(facecolor=COLOR_NOT_CLEARED, edgecolor='black', label='Red - not cleared'),
         mpatches.Patch(facecolor=COLOR_UNKNOWN, edgecolor='black', label='Brown - unknown'),
+        mpatches.Patch(facecolor='white', edgecolor='white', label=''),  # Spacer
+        mpatches.Patch(facecolor='#2196F3', edgecolor='black', label='High flow path'),
+        mpatches.Patch(facecolor='#4CAF50', edgecolor='black', label='Moderate flow'),
+        mpatches.Patch(facecolor='gray', edgecolor='black', label='Low/no flow'),
     ]
-    ax.legend(handles=legend_elements, loc='upper left', fontsize=12, framealpha=0.95, 
-             edgecolor='black', fancybox=False)
+    ax.legend(handles=legend_elements, loc='upper left', fontsize=11, framealpha=0.95, 
+             edgecolor='black', fancybox=False, title='Node Status & Flow Dynamics')
     
     # Styling
     ax.set_aspect('equal')
@@ -192,10 +295,12 @@ def create_network_diagram(world, save_path='demo_results/haso_network.png'):
         spine.set_linewidth(1)
     
     # Add timestamp and stats at bottom
-    stats_text = f"Time: {world.time:.0f}s | Cleared: {cleared}/{total} | Total Evacuees: {sum(len(n.evacuees) for n in G.nodes.values())}"
+    flow_metrics = flow_model.get_flow_metrics()
+    stats_text = f"Time: {world.time:.0f}s | Cleared: {cleared}/{total} | Evacuees: {sum(len(n.evacuees) for n in G.nodes.values())}"
+    stats_text += f" | Total Flow: {flow_metrics['total_flow']:.2f}A | Avg Pressure: {flow_metrics['avg_pressure']:.1f}V"
     ax.text(0.5, -0.02, stats_text,
            transform=ax.transAxes, ha='center', va='top',
-           fontsize=11, bbox=dict(boxstyle='round,pad=0.5', facecolor='lightgray', alpha=0.9, edgecolor='black'))
+           fontsize=10, bbox=dict(boxstyle='round,pad=0.5', facecolor='lightgray', alpha=0.9, edgecolor='black'))
     
     plt.tight_layout()
     plt.savefig(save_path, dpi=150, bbox_inches='tight')

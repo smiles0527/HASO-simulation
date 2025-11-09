@@ -214,6 +214,40 @@ class World:
         self._event_counter += 1
         heapq.heappush(self._event_queue, event)
     
+    def step(self, dt: float) -> None:
+        """
+        Advance simulation by a time step (for real-time visualization).
+        
+        Args:
+            dt: Time delta to advance (seconds)
+        """
+        target_time = self.time + dt
+        
+        # Process events up to target time
+        while self._event_queue and self._event_queue[0].time <= target_time:
+            event = heapq.heappop(self._event_queue)
+            self.time = event.time
+            
+            # Execute event
+            try:
+                event.fn(*event.args)
+            except Exception as e:
+                print(f"[World] Error in event {event.event_id} at t={self.time:.2f}: {e}")
+            
+            # HASO: Update hazards periodically
+            if self.time >= self._next_hazard_update:
+                self.update_hazards(self.hazard_update_interval)
+                self._next_hazard_update = self.time + self.hazard_update_interval
+            
+            # Record history periodically
+            if self.time >= self._next_record_time:
+                self._record_state()
+                self._next_record_time = self.time + self.record_interval
+        
+        # Advance time to target even if no events
+        if self.time < target_time:
+            self.time = target_time
+    
     def run(self, tmax: float = 1200.0) -> None:
         """
         Run simulation until tmax or all rooms cleared.
