@@ -107,7 +107,7 @@ __all__ = [
     # World
     "World",
     "FogOfWar",
-    "Event",its
+    "Event",
     # Policies
     "make_default_policies",
     "tick_policy",
