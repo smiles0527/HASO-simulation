@@ -124,6 +124,7 @@ class Agent:
     rooms_cleared: int = 0
     evacuees_assisted: int = 0
     distance_traveled: float = 0.0
+    busy_until: float = 0.0
     
     # Communication and signaling
     signals: List[Tuple[int, str]] = field(default_factory=list)  # [(node_id, signal_type), ...]
@@ -260,6 +261,20 @@ class Agent:
         """Mark that this agent assisted an evacuee."""
         self.evacuees_assisted += 1
         self.log_action(f"Assisted evacuee {evacuee_id}")
+
+    # Busy-state helpers -------------------------------------------------
+    def is_busy(self, current_time: float, epsilon: float = 1e-6) -> bool:
+        """Return True if the agent is still committed to an in-flight task."""
+        return current_time < self.busy_until - epsilon
+
+    def set_busy_until(self, end_time: float) -> None:
+        """Mark the agent as occupied until the specified simulation time."""
+        if end_time > self.busy_until:
+            self.busy_until = end_time
+
+    def clear_busy(self, current_time: float | None = None) -> None:
+        """Clear the busy flag (optionally snapping to current simulation time)."""
+        self.busy_until = current_time if current_time is not None else 0.0
 
 
 class SweepMode:

@@ -95,7 +95,7 @@ EDGE_TYPE_PROPERTIES = {
     },
     EdgeType.OPEN_DOOR: {
         'base_traversable': True,
-        'blocks_vision': True,  # Can't see through doorway even when open
+        'blocks_vision': False,  # Open doorway affords limited line of sight
         'speed_modifier': 0.9,  # Slight slowdown passing through
         'can_open': False,  # Already open
         'can_break': False,
@@ -563,6 +563,8 @@ def load_map_yaml(path: str) -> Graph:
         )
         graph.add_edge(edge)
     
+    existing_evac_ids = set()
+
     # Load evacuees
     for evac_data in data.get('evacuees', []):
         evacuee = Evacuee(
@@ -574,6 +576,44 @@ def load_map_yaml(path: str) -> Graph:
         node = graph.get_node(evacuee.node)
         if node:
             node.evacuees.append(evacuee)
-    
+            existing_evac_ids.add(evacuee.id)
+
+    # Expand evacuee groups (bulk definitions)
+    next_evac_id = max(existing_evac_ids) + 1 if existing_evac_ids else 0
+    for group in data.get('evacuee_groups', []):
+        count = int(group.get('count', 0) or 0)
+        if count <= 0:
+            continue
+
+        nodes = group.get('nodes') or []
+        if not nodes and 'node' in group:
+            nodes = [group['node']]
+        if not nodes:
+            continue
+
+        profiles = group.get('profiles') or []
+        default_age = group.get('age_group', 'adult')
+        default_health = group.get('health', 'healthy')
+
+        for i in range(count):
+            profile = profiles[i % len(profiles)] if profiles else {}
+            age_group = profile.get('age_group', default_age)
+            health = profile.get('health', default_health)
+
+            node_id = nodes[i % len(nodes)]
+            node = graph.get_node(node_id)
+            if not node:
+                continue
+
+            evacuee = Evacuee(
+                id=next_evac_id,
+                age_group=age_group,
+                health=health,
+                node=node_id,
+            )
+            node.evacuees.append(evacuee)
+            existing_evac_ids.add(next_evac_id)
+            next_evac_id += 1
+
     return graph
 

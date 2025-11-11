@@ -611,7 +611,7 @@ class World:
                     continue
                 
                 edge = self.G.get_edge(current, neighbor)
-                if not edge or not edge.traversable or not edge.is_open:
+                if not edge:
                     continue
                 
                 # HASO cost function
@@ -619,7 +619,26 @@ class World:
                 if node:
                     # Base traversal time
                     hazard_mod = self.get_hazard_modifier(neighbor)
-                    edge_cost = edge.get_traversal_time(base_speed=1.5, hazard_modifier=hazard_mod)
+                    prep_cost = 0.0
+                    traversable = edge.traversable and edge.is_open
+                    if not traversable:
+                        if edge.can_open_edge():
+                            prep_cost = edge.get_open_time()
+                            traversable = True
+                        elif edge.can_break_edge():
+                            prep_cost = edge.get_break_time()
+                            traversable = True
+                        else:
+                            traversable = False
+                    if not traversable:
+                        continue
+                    props = edge.get_properties()
+                    speed_modifier = props.get('speed_modifier', 1.0) or 1.0
+                    effective_speed = 1.5 * hazard_mod * speed_modifier
+                    if effective_speed <= 0:
+                        continue
+                    travel_time = edge.length / effective_speed
+                    edge_cost = prep_cost + travel_time
                     
                     # Add hazard penalty: β⋅h_j(t)
                     hazard_cost = beta * node.hazard_severity

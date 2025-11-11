@@ -1,5 +1,5 @@
 """
-Advanced Real-Time Evacuation Simulation Dashboard
+Real-Time Evacuation Simulation Dashboard
 
 A comprehensive visualization system for the HASO evacuation framework featuring:
 - Real-time agent movement with smooth interpolation
@@ -27,7 +27,7 @@ from matplotlib.widgets import Slider, Button
 from matplotlib.patches import Circle, Rectangle, FancyArrowPatch, Wedge, Arrow
 from matplotlib.collections import LineCollection, PatchCollection
 from matplotlib.colors import LinearSegmentedColormap, Normalize
-from matplotlib.cm import ScalarMappable
+from matplotlib import colors as mcolors
 from typing import Dict, List, Tuple, Optional, Any
 from pathlib import Path
 import time as pytime
@@ -38,7 +38,6 @@ try:
     HAS_NETWORKX = True
 except ImportError:
     HAS_NETWORKX = False
-    print("[WARNING] NetworkX not available. Node layout will use default positions.")
 
 from .graph_model import Graph, Node, Edge, NodeType, EdgeType, HazardType
 from .agents import Agent, Role, Status
@@ -99,12 +98,12 @@ FOG_COLORS = {
 
 class LiveSimulationDashboard:
     """
-    Premium real-time simulation dashboard with comprehensive visualization
+    Real-time simulation dashboard with comprehensive visualization
     and interactive controls.
     """
     
-    def __init__(self, world: World, fps: int = 120, duration: float = 300.0,
-                 enable_advanced_features: bool = True):
+    def __init__(self, world: World, fps: int = 20, duration: float = 300.0,
+                 enable_advanced_features: bool = True, quiet: bool = False):
         """
         Initialize the live simulation dashboard.
         
@@ -121,6 +120,7 @@ class LiveSimulationDashboard:
         self.duration = duration
         self.total_frames = int(duration * self.fps)
         self.advanced = enable_advanced_features
+        self.quiet = quiet
         
         # Ensure agents are scheduled to act
         self._init_agent_scheduling()
@@ -147,34 +147,59 @@ class LiveSimulationDashboard:
         self.agent_scatter = None
         self._agent_id_order = []
         self._agent_colors = None
+        self._agent_index: Dict[int, int] = {}
+        self._agent_positions = None
         self.node_artists = {}
+        self.node_collection: Optional[PatchCollection] = None
+        self.node_order: List[int] = []
+        self._node_facecolors: Optional[np.ndarray] = None
+        self._node_index: Dict[int, int] = {}
         self.edge_artists = []
         self.flow_arrows = []
         self.heat_overlay = None
         # Evacuee rendering
         self.evacuee_scatter = None
         self._evacuees = []  # evacuee state list
-        self.agent_labels: Dict[int, Any] = {}
+        self._evac_positions = None
         self.reference_axes = []
+        # Caches to skip redundant drawing work
+        self.node_cache: Dict[int, Dict[str, Any]] = {}
+        self.edge_cache: Dict[Tuple[int, int], str] = {}
         
         # Performance tracking
         self.frame_times = deque(maxlen=30)
         self.actual_fps = self.fps
+        # Update throttling
+        self.metrics_interval = 10
+        self.flow_update_interval = 10
         
         # Initialize visualization
         self._setup_figure()
         self._setup_plots()
         self._calculate_layout()
         self._init_visualization()
+        # Connect keyboard controls for responsiveness
+        self.fig.canvas.mpl_connect('key_press_event', self._on_key_press)
+        # Draw static background once before animation for blitting
+        self.fig.canvas.draw()
+        # Ensure all agents have an initial tick scheduled so movement begins immediately
+        try:
+            from .policies import tick_policy
+            for agent in self.world.agents:
+                self.world.schedule(0, tick_policy, self.world, agent)
+        except ImportError:
+            pass
         
-        print(f"Dashboard initialized: {len(world.G.nodes)} nodes, {len(world.agents)} agents")
+        if not self.quiet:
+            print(f"Dashboard initialized: {len(world.G.nodes)} nodes, {len(world.agents)} agents")
     
     def _init_agent_scheduling(self):
         """Initialize agent scheduling for simulation."""
         try:
             from .policies import tick_policy
         except ImportError:
-            print("[WARNING] Could not import tick_policy - agents may not move")
+            if not self.quiet:
+                print("[WARNING] Could not import tick_policy - agents may not move")
             return
         # Avoid duplicate scheduling by checking existing tick events
         scheduled_ids = {
@@ -275,10 +300,12 @@ class LiveSimulationDashboard:
             [], [], color=THEME_COLORS['success'], linewidth=2.5, 
             label='Cleared', alpha=0.9
         )
+        self.line_cleared.set_animated(False)
         self.line_discovered, = self.ax_progress.plot(
             [], [], color=THEME_COLORS['text_secondary'], linewidth=1.5, 
             label='Discovered', linestyle='--', alpha=0.6
         )
+        self.line_discovered.set_animated(False)
         
         # Clean legend
         legend = self.ax_progress.legend(fontsize=8, loc='upper left', 
@@ -297,12 +324,13 @@ class LiveSimulationDashboard:
             fontsize=9, ha='center', va='center',
             fontfamily='sans-serif', color=THEME_COLORS['text_secondary']
         )
+        self.stats_text.set_animated(False)
         self.agent_panel_text = self.ax_agents.text(
             0.05, 0.95, '', transform=self.ax_agents.transAxes,
             fontsize=9, verticalalignment='top',
             color=THEME_COLORS['text_primary'], linespacing=1.8
         )
-        self.agent_panel_text.set_animated(True)
+        self.agent_panel_text.set_animated(False)
         
         # Time display
         self.time_text = self.ax_time_display.text(
@@ -311,11 +339,13 @@ class LiveSimulationDashboard:
             fontfamily='monospace', color=THEME_COLORS['text_primary'],
             fontweight='500'
         )
+        self.time_text.set_animated(False)
         self.speed_text = self.ax_time_display.text(
             0.5, 0.2, 'Speed:1.00x', transform=self.ax_time_display.transAxes,
             fontsize=7, ha='center', va='center',
             fontfamily='monospace', color=THEME_COLORS['text_secondary']
         )
+        self.speed_text.set_animated(False)
         self._load_reference_images()
     
     def _calculate_layout(self):
@@ -328,7 +358,6 @@ class LiveSimulationDashboard:
                 break
         
         if has_coords:
-            print(f"Using building coordinates from YAML ({len(self.world.G.nodes)} rooms)")
             return
         
         # Fallback only if coordinates missing
@@ -340,7 +369,7 @@ class LiveSimulationDashboard:
                 angle = 2 * math.pi * i / num_nodes
                 node.x = 50 * math.cos(angle)
                 node.y = 50 * math.sin(angle)
-        print(f"Using fallback circular layout")
+        return
     
     def _init_visualization(self):
         """Initialize all visual elements with premium styling."""
@@ -446,118 +475,89 @@ class LiveSimulationDashboard:
                                     (node_src.y + node_dst.y) / 2)
                     })
     
+    def _determine_node_color_key(self, node: Node, agent_present: bool) -> str:
+        if node.node_type == NodeType.EXIT:
+            return 'exit'
+        if node.node_type == NodeType.CORRIDOR:
+            return 'corridor'
+        if node.cleared:
+            return 'cleared'
+        if agent_present:
+            return 'in_progress'
+        return 'not_cleared'
+
     def _draw_nodes(self):
         """Draw nodes as clean rectangles - OPTIMIZED for performance."""
-        for node_id, node in self.world.G.nodes.items():
-            # Determine room size and styling based on type
+        patches = []
+        facecolors = []
+        self.node_order = []
+        self._node_index = {}
+        for idx, (node_id, node) in enumerate(self.world.G.nodes.items()):
             room_name = getattr(node, 'name', '') or str(node_id)
             if node.node_type == NodeType.EXIT:
-                # Exits - Distinctive green squares
                 width, height = 5, 5
-                color = NODE_STATE_COLORS['exit']
+                color_key = 'exit'
                 label_text = room_name if room_name else "EXIT"
-                edgecolor = '#2F855A'
-                edgewidth = 3
             elif node.node_type == NodeType.CORRIDOR:
-                # Corridors - Elongated rectangles
                 width, height = 7, 3
-                color = NODE_STATE_COLORS['corridor']
+                color_key = 'corridor'
                 label_text = room_name
-                edgecolor = '#A0AEC0'
-                edgewidth = 2
             else:
-                # Regular rooms - sized by area
                 area = getattr(node, 'area', 20)
                 width = height = np.sqrt(area) * 0.9
-                
-                if node.cleared:
-                    color = NODE_STATE_COLORS['cleared']
-                    label_text = f"✓ {room_name}"
-                    edgecolor = '#2C5282'
-                    edgewidth = 2.5
-                else:
-                    color = NODE_STATE_COLORS['not_cleared']
-                    label_text = room_name
-                    edgecolor = '#C53030'
-                    edgewidth = 2.5
-            
-            # Draw room as simple rectangle - FAST!
+                color_key = 'cleared' if node.cleared else 'not_cleared'
+                label_text = room_name
+
             rect = Rectangle(
-                (node.x - width/2, node.y - height/2), 
-                width, height,
-                facecolor=color, edgecolor=edgecolor, linewidth=edgewidth,
-                alpha=0.9, zorder=3
+                (node.x - width/2, node.y - height/2),
+                width, height
             )
-            self.ax_layout.add_patch(rect)
-            
-            # Room label
+            patches.append(rect)
+            facecolors.append(NODE_STATE_COLORS[color_key])
             label = self.ax_layout.text(
                 node.x, node.y, label_text,
                 ha='center', va='center', fontsize=9, fontweight='bold',
                 color='white' if node.node_type != NodeType.CORRIDOR else '#2D3748',
                 zorder=4
             )
-            
-            # Hazard indicator (simple + severity)
-            hazard_marker = None
-            hazard_text = None
-            if node.hazard != HazardType.NONE and node.hazard_severity > 0.3:
-                hazard_circle = Circle(
-                    (node.x + width/2 - 1, node.y + height/2 - 1), 
-                    0.7,
-                    facecolor='#F56565', edgecolor='#C53030',
-                    linewidth=1.5, alpha=0.95, zorder=5
-                )
-                self.ax_layout.add_patch(hazard_circle)
-                hazard_marker = hazard_circle
-                hazard_text = self.ax_layout.text(
-                    node.x + width/2 - 1, node.y + height/2 - 1,
-                    f"{int(node.hazard_severity*100)}%",
-                    ha='center', va='center', fontsize=6, fontweight='bold',
-                    color='white', zorder=6
-                )
-            # Fog overlay (semi-transparent rectangle)
-            fog_alpha, fog_color = FOG_COLORS.get(node.fog_state, (0.18, '#4B5563'))
-            fog_overlay = Rectangle(
-                (node.x - width/2, node.y - height/2),
-                width, height,
-                facecolor=fog_color, edgecolor='none',
-                alpha=fog_alpha, zorder=4.2
-            )
-            self.ax_layout.add_patch(fog_overlay)
-            # Occupancy label (number of evacuees inside)
-            occ_count = len(node.evacuees)
-            occ_label = self.ax_layout.text(
-                node.x, node.y - height/2 - 0.8,
-                f"Evac:{occ_count}", fontsize=6, fontweight='bold',
-                ha='center', va='top', color=THEME_COLORS['text_secondary'],
-                zorder=5
-            )
-            
             self.node_artists[node_id] = {
-                'rect': rect,
                 'label': label,
                 'node': node,
-                'hazard_marker': hazard_marker,
-                'hazard_label': hazard_text,
-                'fog_overlay': fog_overlay,
-                'occupancy_label': occ_label,
                 'width': width,
-                'height': height
+                'height': height,
+                'color_key': color_key
             }
+            self.node_cache[node_id] = {
+                'color_key': color_key
+            }
+            self.node_order.append(node_id)
+            self._node_index[node_id] = idx
+
+        if patches:
+            self.node_collection = PatchCollection(
+                patches,
+                facecolors=[mcolors.to_rgba(c) for c in facecolors],
+                edgecolors=THEME_COLORS['border'],
+                linewidths=1.5,
+                alpha=0.9,
+                zorder=3
+            )
+            self.ax_layout.add_collection(self.node_collection)
+            self._node_facecolors = self.node_collection.get_facecolors()
     
     def _init_agents(self):
         """Initialize agent visual elements - supports ultra-fast scatter mode."""
         positions = []
         colors = []
         self._agent_id_order = []
-        for agent in self.world.agents:
+        for idx, agent in enumerate(self.world.agents):
             node = self.world.G.get_node(agent.node)
             if not node:
                 continue
             positions.append([node.x, node.y])
             colors.append(ROLE_COLORS.get(agent.role, THEME_COLORS['text_secondary']))
             self._agent_id_order.append(agent.id)
+            self._agent_index[agent.id] = len(self._agent_id_order) - 1
             self.agent_artists[agent.id] = {
                 'color': colors[-1],
                 'path_x': deque([node.x], maxlen=60),
@@ -576,24 +576,14 @@ class LiveSimulationDashboard:
             pos_arr = np.empty((0, 2))
             color_arr = np.empty((0,))
         self._agent_colors = color_arr
+        self._agent_positions = np.array(pos_arr) if pos_arr.size else np.empty((0, 2))
         self.agent_scatter = self.ax_layout.scatter(
             pos_arr[:, 0] if pos_arr.size else np.array([]),
             pos_arr[:, 1] if pos_arr.size else np.array([]),
             s=36, c=color_arr if color_arr.size else '#2563EB', marker='o', linewidths=0,
             zorder=10, animated=True
         )
-        # Agent labels (ID + role)
-        for agent_id, agent in zip(self._agent_id_order, self.world.agents):
-            node = self.world.G.get_node(agent.node)
-            if not node:
-                continue
-            label = self.ax_layout.text(
-                node.x, node.y + 1.2,
-                f"A{agent.id}:{agent.role.name[0]}", fontsize=7, fontweight='bold',
-                ha='center', va='bottom', color='#111827', zorder=11
-            )
-            self.agent_labels[agent.id] = label
-    
+        
     def _init_flow_arrows(self):
         """Initialize flow direction arrows for advanced visualization."""
         self.flow_arrows = []
@@ -786,8 +776,9 @@ class LiveSimulationDashboard:
                 colors.append('#2563EB' if state['moving'] else '#9CA3AF')
                 self._evacuees.append(state)
         if positions:
+            self._evac_positions = np.array(positions)
             self.evacuee_scatter = self.ax_layout.scatter(
-                np.array(positions)[:, 0], np.array(positions)[:, 1],
+                self._evac_positions[:, 0], self._evac_positions[:, 1],
                 s=20, c=np.array(colors), marker='o', linewidths=0, alpha=0.9, zorder=9, animated=True
             )
 
@@ -795,13 +786,15 @@ class LiveSimulationDashboard:
         """Advance evacuees along paths; start evac when assisted."""
         if not self._evacuees:
             return
-        positions = []
         agents_by_node = {}
         for a in self.world.agents:
             agents_by_node.setdefault(a.node, []).append(a)
+        if self._evac_positions is None or len(self._evac_positions) != len(self._evacuees):
+            self._evac_positions = np.zeros((len(self._evacuees), 2))
         for e in self._evacuees:
             if e['outside']:
-                positions.append([e['x'], e['y']])
+                self._evac_positions[e['id'], 0] = e['x']
+                self._evac_positions[e['id'], 1] = e['y']
                 continue
             if not e['moving'] and e['needs_help']:
                 for a in agents_by_node.get(e['node'], []):
@@ -811,7 +804,8 @@ class LiveSimulationDashboard:
                         break
             path = e['path']
             if not path or len(path) <= 1:
-                positions.append([e['x'], e['y']])
+                self._evac_positions[e['id'], 0] = e['x']
+                self._evac_positions[e['id'], 1] = e['y']
                 continue
             if e['seg_progress'] >= 1.0 or 'start_node' not in e or 'target_node' not in e:
                 if e['seg_idx'] >= len(path) - 1:
@@ -819,7 +813,8 @@ class LiveSimulationDashboard:
                     e['x'] = last_node.x if last_node else e['x']
                     e['y'] = last_node.y if last_node else e['y']
                     e['outside'] = True
-                    positions.append([e['x'], e['y']])
+                    self._evac_positions[e['id'], 0] = e['x']
+                    self._evac_positions[e['id'], 1] = e['y']
                     continue
                 start_id = path[e['seg_idx']]
                 target_id = path[e['seg_idx'] + 1]
@@ -846,14 +841,14 @@ class LiveSimulationDashboard:
                         if e['seg_idx'] >= len(path) - 1:
                             if dst.node_type == NodeType.EXIT:
                                 e['outside'] = True
-                positions.append([e['x'], e['y']])
+                self._evac_positions[e['id'], 0] = e['x']
+                self._evac_positions[e['id'], 1] = e['y']
             else:
-                positions.append([e['x'], e['y']])
-        if self.evacuee_scatter is not None:
-            offsets = np.asarray(positions) if positions else np.empty((0, 2))
-            if offsets.ndim == 1:
-                offsets = offsets.reshape(-1, 2)
-            self.evacuee_scatter.set_offsets(offsets)
+                pass
+                self._evac_positions[e['id'], 0] = e['x']
+                self._evac_positions[e['id'], 1] = e['y']
+        if self.evacuee_scatter is not None and self._evac_positions is not None and self._evac_positions.size:
+            self.evacuee_scatter.set_offsets(self._evac_positions)
     
     def _update_frame(self, frame: int):
         """
@@ -898,16 +893,19 @@ class LiveSimulationDashboard:
     
     def _record_frame_data(self, current_time: float):
         """Record data for the current frame."""
+        if self.current_frame % self.metrics_interval != 0:
+            return
         self.times.append(current_time)
         cleared, total = self.world.G.get_cleared_count()
         self.cleared_counts.append(cleared)
         discovered = sum(1 for n in self.world.G.nodes.values() if n.fog_state >= 1)
         self.discovered_counts.append(discovered)
-        for (src, dst) in list(self.world.G.edges.keys())[:50]:
-            flow = self.flow_model.calculate_flow_rate(src, dst)
-            self.flow_model.edge_flow[(src, dst)] = flow
-        flow_metrics = self.flow_model.get_flow_metrics()
-        self.flow_metrics_history.append(flow_metrics)
+        if self.current_frame % self.flow_update_interval == 0:
+            for (src, dst) in list(self.world.G.edges.keys())[:50]:
+                flow = self.flow_model.calculate_flow_rate(src, dst)
+                self.flow_model.edge_flow[(src, dst)] = flow
+            flow_metrics = self.flow_model.get_flow_metrics()
+            self.flow_metrics_history.append(flow_metrics)
         for agent in self.world.agents:
             if agent.id in self.agent_positions_history:
                 x, y = self._interpolate_agent_position(agent)
@@ -915,14 +913,15 @@ class LiveSimulationDashboard:
     
     def _update_agents(self):
         """Update agent positions - OPTIMIZED for maximum performance."""
-        positions = []
-        agent_by_id = {a.id: a for a in self.world.agents}
+        if self._agent_positions is None:
+            return
+        agent_map = {a.id: a for a in self.world.agents}
         for agent_id in self._agent_id_order:
-            agent = agent_by_id.get(agent_id)
+            idx = self._agent_index.get(agent_id)
+            if idx is None:
+                continue
+            agent = agent_map.get(agent_id)
             if agent is None:
-                state = self.agent_artists.get(agent_id)
-                if state:
-                    positions.append([state.get('current_x', 0.0), state.get('current_y', 0.0)])
                 continue
             state = self.agent_artists[agent_id]
             x, y = self._interpolate_agent_position(agent)
@@ -931,67 +930,38 @@ class LiveSimulationDashboard:
             if abs(x - last_x) > 0.05 or abs(y - last_y) > 0.05:
                 state['path_x'].append(x)
                 state['path_y'].append(y)
-            positions.append([x, y])
-            label = self.agent_labels.get(agent_id)
-            if label:
-                role_char = agent.role.name[0]
-                label.set_position((x, y + 1.2))
-                label.set_text(f"A{agent.id}:{role_char}")
-        if self.agent_scatter is not None:
-            offsets = np.asarray(positions) if positions else np.empty((0, 2))
-            if offsets.ndim == 1:
-                offsets = offsets.reshape(-1, 2)
-            self.agent_scatter.set_offsets(offsets)
+            self._agent_positions[idx, 0] = x
+            self._agent_positions[idx, 1] = y
+        if self.agent_scatter is not None and self._agent_positions.size:
+            self.agent_scatter.set_offsets(self._agent_positions)
     
     def _update_nodes(self):
         """Update node colors with smooth transitions."""
+        if self.node_collection is None or self._node_facecolors is None:
+            return
+        agent_nodes = {a.node for a in self.world.agents}
+        facecolors = self._node_facecolors
+        dirty = False
         for node_id, artists in self.node_artists.items():
             node = artists['node']
-            
-            # Determine color (simplified logic for speed)
-            if node.node_type == NodeType.EXIT:
-                continue  # Exits never change color
-            elif node.node_type == NodeType.CORRIDOR:
-                continue  # Corridors don't change much
-            elif node.cleared and not artists.get('was_cleared'):
-                # Room just cleared! Update with celebration effect
-                artists['rect'].set_facecolor(NODE_STATE_COLORS['cleared'])
-                artists['rect'].set_edgecolor('#2C5282')
-                artists['rect'].set_linewidth(2.5)
-                room_display = getattr(node, 'name', '') or str(node_id)
-                artists['label'].set_text(f"✓ {room_display}")
-                artists['was_cleared'] = True
-            elif any(a.node == node_id for a in self.world.agents):
-                # Agent currently in this room (clearing in progress)
-                if not node.cleared:
-                    artists['rect'].set_facecolor(NODE_STATE_COLORS['in_progress'])
-                    artists['rect'].set_edgecolor('#C05621')
-            elif not node.cleared and not any(a.node == node_id for a in self.world.agents):
-                # Not cleared and no agents present
-                if not artists.get('was_cleared'):
-                    artists['rect'].set_facecolor(NODE_STATE_COLORS['not_cleared'])
-                    artists['rect'].set_edgecolor('#C53030')
-            # Update hazard label if present
-            if node.hazard != HazardType.NONE and node.hazard_severity > 0.3:
-                if artists.get('hazard_marker') is not None:
-                    artists['hazard_marker'].set_visible(True)
-                if artists.get('hazard_label') is not None:
-                    artists['hazard_label'].set_text(f"{int(node.hazard_severity * 100)}%")
-                    artists['hazard_label'].set_visible(True)
-            else:
-                if artists.get('hazard_marker') is not None:
-                    artists['hazard_marker'].set_visible(False)
-                if artists.get('hazard_label') is not None:
-                    artists['hazard_label'].set_visible(False)
-            # Update fog overlay
-            fog_alpha, fog_color = FOG_COLORS.get(node.fog_state, (0.18, '#4B5563'))
-            fog_overlay = artists.get('fog_overlay')
-            if fog_overlay:
-                fog_overlay.set_alpha(fog_alpha)
-                fog_overlay.set_facecolor(fog_color)
-            occ_label = artists.get('occupancy_label')
-            if occ_label:
-                occ_label.set_text(f"Evac:{len(node.evacuees)}")
+            if node is None:
+                continue
+            agent_present = node_id in agent_nodes
+            new_key = self._determine_node_color_key(node, agent_present)
+            cached = self.node_cache.get(node_id, {}).get('color_key')
+            if cached == new_key:
+                continue
+            self.node_cache[node_id]['color_key'] = new_key
+            idx = self._node_index.get(node_id)
+            if idx is None or idx >= len(facecolors):
+                continue
+            facecolors[idx] = mcolors.to_rgba(NODE_STATE_COLORS[new_key])
+            dirty = True
+            room_display = getattr(node, 'name', '') or str(node_id)
+            if node.node_type != NodeType.CORRIDOR:
+                artists['label'].set_text(f"✓ {room_display}" if new_key == 'cleared' else room_display)
+        if dirty:
+            self.node_collection.set_facecolors(facecolors)
     
     def _update_edges(self):
         """Update edge visualization based on flow dynamics."""
@@ -1004,22 +974,19 @@ class LiveSimulationDashboard:
             
             # Update visualization based on flow
             if flow > 0.5:
-                color = FLOW_COLORS['high']
-                alpha = 0.9
-                width = 3.5
+                bucket = 'high'
             elif flow > 0.1:
-                color = FLOW_COLORS['medium']
-                alpha = 0.7
-                width = 2.5
+                bucket = 'medium'
             elif flow > 0.01:
-                color = FLOW_COLORS['low']
-                alpha = 0.5
-                width = 1.5
+                bucket = 'low'
             else:
-                color = FLOW_COLORS['none']
-                alpha = 0.3
-                width = 1.0
-            
+                bucket = 'none'
+            if self.edge_cache.get((edge.src, edge.dst)) == bucket:
+                continue
+            self.edge_cache[(edge.src, edge.dst)] = bucket
+            color = FLOW_COLORS[bucket]
+            alpha = {'high':0.9,'medium':0.7,'low':0.5,'none':0.3}[bucket]
+            width = {'high':3.5,'medium':2.5,'low':1.5,'none':1.0}[bucket]
             line.set_color(color)
             line.set_alpha(alpha)
             line.set_linewidth(width)
@@ -1091,30 +1058,6 @@ class LiveSimulationDashboard:
             artists.append(self.agent_scatter)
         if self.evacuee_scatter is not None:
             artists.append(self.evacuee_scatter)
-        for edge_art in self.edge_artists:
-            artists.append(edge_art['line'])
-        for node_art in self.node_artists.values():
-            artists.append(node_art['rect'])
-            artists.append(node_art['label'])
-            if node_art.get('hazard_marker') is not None:
-                artists.append(node_art['hazard_marker'])
-            if node_art.get('hazard_label') is not None:
-                artists.append(node_art['hazard_label'])
-            if node_art.get('fog_overlay') is not None:
-                artists.append(node_art['fog_overlay'])
-            if node_art.get('occupancy_label') is not None:
-                artists.append(node_art['occupancy_label'])
-        artists.extend([
-            self.stats_text,
-            self.time_text,
-            self.speed_text,
-            self.line_cleared,
-            self.line_discovered,
-            self.agent_panel_text,
-        ])
-        artists.extend(self.agent_labels.values())
-        for ax in self.reference_axes:
-            artists.extend(ax.get_children())
         return artists
     
     def _on_slider_change(self, val):
@@ -1127,26 +1070,31 @@ class LiveSimulationDashboard:
         """Handle keyboard controls."""
         if event.key == ' ':
             self.paused = not self.paused
-            print(f"{'Paused' if self.paused else 'Resumed'}")
+            if not self.quiet:
+                print(f"{'Paused' if self.paused else 'Resumed'}")
         
         elif event.key == 'r':
             self.current_frame = 0
             self.world.time = 0.0
-            print("Reset to start")
+            if not self.quiet:
+                print("Reset to start")
         
         elif event.key == 's':
             filename = f'evacuation_frame_{self.current_frame:05d}.png'
             self.fig.savefig(filename, dpi=200, bbox_inches='tight')
-            print(f"Saved: {filename}")
+            if not self.quiet:
+                print(f"Saved: {filename}")
         
         elif event.key in ['1', '2', '3', '4', '5']:
             speeds = {'1': 0.25, '2': 0.5, '3': 1.0, '4': 2.0, '5': 5.0}
             self.speed_multiplier = speeds[event.key]
             self.speed_text.set_text(f'Speed: {self.speed_multiplier:.2f}x')
-            print(f"Speed set to {self.speed_multiplier}x")
+            if not self.quiet:
+                print(f"Speed set to {self.speed_multiplier}x")
         
         elif event.key == 'escape':
-            print("Exiting simulation...")
+            if not self.quiet:
+                print("Exiting simulation...")
             plt.close(self.fig)
     
     def run(self, save_video: bool = False, video_path: str = 'evacuation_simulation.mp4'):
@@ -1157,9 +1105,9 @@ class LiveSimulationDashboard:
             save_video: If True, render to video file instead of displaying
             video_path: Output video file path
         """
-        # Create animation
-        print(f"\nStarting animation: {self.total_frames} frames at {self.fps} FPS")
-        print(f"Agents scheduled: {len(self.world._event_queue)} initial events")
+        if not self.quiet:
+            print(f"\nStarting animation: {self.total_frames} frames at {self.fps} FPS")
+            print(f"Agents scheduled: {len(self.world._event_queue)} initial events")
         
         self.anim = FuncAnimation(
             self.fig,
@@ -1172,8 +1120,9 @@ class LiveSimulationDashboard:
         )
         
         if save_video:
-            print(f"Rendering video to: {video_path}")
-            print("This may take several minutes...")
+            if not self.quiet:
+                print(f"Rendering video to: {video_path}")
+                print("This may take several minutes...")
             
             try:
                 self.anim.save(
@@ -1183,18 +1132,25 @@ class LiveSimulationDashboard:
                     dpi=120,
                     bitrate=2000
                 )
-                print(f"[OK] Video saved successfully: {video_path}")
+                if not self.quiet:
+                    print(f"[OK] Video saved successfully: {video_path}")
             except Exception as e:
-                print(f"[ERROR] Error saving video: {e}")
-                print("  Make sure ffmpeg is installed and in your PATH")
+                if not self.quiet:
+                    print(f"[ERROR] Error saving video: {e}")
+                    print("  Make sure ffmpeg is installed and in your PATH")
         else:
-            print("Displaying dashboard...")
+            if not self.quiet:
+                print("Displaying dashboard...")
             plt.show()
 
+    def _init_blit_artists(self):
+        """Deprecated: retained for compatibility."""
+        return []
 
-def create_live_visualization(world: World, fps: int = 120, duration: float = 300.0,
+
+def create_live_visualization(world: World, fps: int = 20, duration: float = 300.0,
                               save_video: bool = False, video_path: str = 'evacuation_sim.mp4',
-                              advanced: bool = True):
+                              advanced: bool = True, quiet: bool = False):
     """
     Create and launch the live evacuation simulation dashboard.
     
@@ -1210,6 +1166,7 @@ def create_live_visualization(world: World, fps: int = 120, duration: float = 30
         LiveSimulationDashboard instance with recorded data
     """
     dashboard = LiveSimulationDashboard(world, fps=fps, duration=duration, 
-                                       enable_advanced_features=advanced)
+                                       enable_advanced_features=advanced,
+                                       quiet=quiet)
     dashboard.run(save_video=save_video, video_path=video_path)
     return dashboard
