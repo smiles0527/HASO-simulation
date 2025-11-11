@@ -357,8 +357,9 @@ def _move_agent_to(world: World, agent: Agent, target: int) -> None:
             # Track distance
             agent.distance_traveled += edge.length
             
-            # Schedule arrival
+            # Schedule arrival and register movement for visualization
             world.schedule(travel_time, _arrive_at_node, world, agent, next_node)
+            world.register_agent_movement(agent.id, agent.node, next_node, travel_time)
             agent.log_action(f"Moving to node {next_node} (ETA: {travel_time:.1f}s)")
         else:
             agent.log_action(f"Cannot traverse edge to {next_node}")
@@ -396,6 +397,7 @@ def _secure_hazard(world: World, agent: Agent, node) -> float:
 
 def _arrive_at_node(world: World, agent: Agent, node_id: int) -> None:
     """Callback when agent arrives at a node."""
+    world.finish_agent_movement(agent.id)
     agent.move_to_node(node_id)
     world.fog.update_from_agent(agent)
 

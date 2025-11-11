@@ -29,6 +29,7 @@ from matplotlib.collections import LineCollection, PatchCollection
 from matplotlib.colors import LinearSegmentedColormap, Normalize
 from matplotlib.cm import ScalarMappable
 from typing import Dict, List, Tuple, Optional, Any
+from pathlib import Path
 import time as pytime
 from collections import deque
 
@@ -45,44 +46,54 @@ from .world import World
 from .flow_dynamics import FlowDynamics
 
 
-# Clean, minimalist color scheme inspired by Algorithm Visualizer
+# Professional emergency response color scheme
 THEME_COLORS = {
-    'background': '#FAFBFC',
+    'background': '#F5F7FA',
     'panel_bg': '#FFFFFF',
-    'border': '#E1E4E8',
-    'text_primary': '#24292E',
-    'text_secondary': '#586069',
-    'accent': '#0366D6',
-    'success': '#28A745',
-    'warning': '#FFB700',
-    'danger': '#D73A49',
-    'info': '#005CC5',
-    'grid': '#F6F8FA',
+    'border': '#D1D9E6',
+    'text_primary': '#1A202C',
+    'text_secondary': '#4A5568',
+    'accent': '#3182CE',
+    'success': '#38A169',
+    'warning': '#DD6B20',
+    'danger': '#E53E3E',
+    'info': '#3182CE',
+    'grid': '#EDF2F7',
+    'shadow': 'rgba(0,0,0,0.08)',
 }
 
+# Modern, high-contrast room colors
 NODE_STATE_COLORS = {
-    'exit': '#0366D6',
-    'cleared': '#28A745',
-    'in_progress': '#FFB700',
-    'not_cleared': '#D73A49',
-    'unknown': '#959DA5',
-    'hazard_high': '#B31D28',
-    'hazard_medium': '#D73A49',
-    'hazard_low': '#F97583',
+    'exit': '#38A169',  # Vibrant green for exits
+    'cleared': '#4299E1',  # Bright blue for cleared
+    'in_progress': '#ED8936',  # Orange for in progress
+    'not_cleared': '#FC8181',  # Light red for danger
+    'corridor': '#E2E8F0',  # Light gray for corridors
+    'hazard_high': '#C53030',
+    'hazard_medium': '#E53E3E',
+    'hazard_low': '#FC8181',
 }
 
+# Vibrant, distinct agent colors
 ROLE_COLORS = {
-    Role.SCOUT: '#28A745',
-    Role.SECURER: '#0366D6',
-    Role.CHECKPOINTER: '#FFB700',
-    Role.EVACUATOR: '#6F42C1',
+    Role.SCOUT: '#48BB78',  # Bright green
+    Role.SECURER: '#4299E1',  # Bright blue
+    Role.CHECKPOINTER: '#ED8936',  # Bright orange
+    Role.EVACUATOR: '#9F7AEA',  # Bright purple
 }
 
 FLOW_COLORS = {
-    'high': '#0366D6',
-    'medium': '#28A745',
-    'low': '#959DA5',
-    'none': '#E1E4E8',
+    'high': '#3182CE',
+    'medium': '#38A169',
+    'low': '#A0AEC0',
+    'none': '#E2E8F0',
+}
+
+FOG_COLORS = {
+    0: (0.05, '#1F2933'),  # Unknown-unknown -> dark overlay
+    1: (0.15, '#4B5563'),  # Known-unknown
+    2: (0.12, '#FBBF24'),  # Unknown-known (information via signal)
+    3: (0.00, '#FFFFFF'),  # Known-known
 }
 
 
@@ -92,7 +103,7 @@ class LiveSimulationDashboard:
     and interactive controls.
     """
     
-    def __init__(self, world: World, fps: int = 10, duration: float = 300.0,
+    def __init__(self, world: World, fps: int = 120, duration: float = 300.0,
                  enable_advanced_features: bool = True):
         """
         Initialize the live simulation dashboard.
@@ -104,10 +115,11 @@ class LiveSimulationDashboard:
             enable_advanced_features: Enable advanced rendering features
         """
         self.world = world
-        self.fps = fps
-        self.dt = 1.0 / fps
+        # Clamp FPS to safe minimum
+        self.fps = max(1, int(fps))
+        self.dt = 1.0 / float(self.fps)
         self.duration = duration
-        self.total_frames = int(duration * fps)
+        self.total_frames = int(duration * self.fps)
         self.advanced = enable_advanced_features
         
         # Ensure agents are scheduled to act
@@ -132,14 +144,22 @@ class LiveSimulationDashboard:
         
         # Rendering state
         self.agent_artists = {}
+        self.agent_scatter = None
+        self._agent_id_order = []
+        self._agent_colors = None
         self.node_artists = {}
         self.edge_artists = []
         self.flow_arrows = []
         self.heat_overlay = None
+        # Evacuee rendering
+        self.evacuee_scatter = None
+        self._evacuees = []  # evacuee state list
+        self.agent_labels: Dict[int, Any] = {}
+        self.reference_axes = []
         
         # Performance tracking
         self.frame_times = deque(maxlen=30)
-        self.actual_fps = fps
+        self.actual_fps = self.fps
         
         # Initialize visualization
         self._setup_figure()
@@ -151,46 +171,69 @@ class LiveSimulationDashboard:
     
     def _init_agent_scheduling(self):
         """Initialize agent scheduling for simulation."""
-        # Schedule initial ticks for all agents if not already scheduled
-        if not self.world._event_queue:
-            try:
-                from .policies import tick_policy
-                for agent in self.world.agents:
-                    self.world.schedule(0, tick_policy, self.world, agent)
-            except ImportError:
-                print("[WARNING] Could not import tick_policy - agents may not move")
+        try:
+            from .policies import tick_policy
+        except ImportError:
+            print("[WARNING] Could not import tick_policy - agents may not move")
+            return
+        # Avoid duplicate scheduling by checking existing tick events
+        scheduled_ids = {
+            getattr(evt.args[1], 'id', None)
+            for evt in self.world._event_queue
+            if getattr(evt.fn, '__name__', '') == 'tick_policy' and len(evt.args) >= 2
+        }
+        for agent in self.world.agents:
+            if agent.id not in scheduled_ids:
+                self.world.schedule(0, tick_policy, self.world, agent)
     
     def _setup_figure(self):
-        """Create clean, minimalist dashboard layout."""
+        """Create premium professional dashboard layout."""
         # Use clean style
         plt.style.use('default')
         
-        self.fig = plt.figure(figsize=(22, 12), facecolor=THEME_COLORS['background'])
+        self.fig = plt.figure(figsize=(20, 11), facecolor=THEME_COLORS['background'])
+        # Hide toolbar where supported to remove controls
+        try:
+            self.fig.canvas.toolbar_visible = False  # Matplotlib >= 3.7
+        except Exception:
+            try:
+                # Fallback for some backends
+                self.fig.canvas.manager.toolbar.setVisible(False)  # type: ignore[attr-defined]
+            except Exception:
+                pass
         
-        # Clear, informative title
-        self.fig.suptitle('HASO Evacuation Sweep Simulation - Emergency Response Team Coordination', 
-                         fontsize=14, fontweight='600', color=THEME_COLORS['text_primary'],
-                         y=0.98)
+        self.fig.suptitle('EMERGENCY EVACUATION COMMAND CENTER', 
+                         fontsize=16, fontweight='700', color=THEME_COLORS['text_primary'],
+                         y=0.975, family='sans-serif')
+        self.fig.text(0.5, 0.955, 'HASO Multi-Agent Coordination System', 
+                     ha='center', fontsize=10, color=THEME_COLORS['text_secondary'],
+                     style='italic')
         
         # Simplified grid layout - focus on main visualization
         gs = self.fig.add_gridspec(4, 5, hspace=0.25, wspace=0.3,
                                    left=0.05, right=0.95, top=0.94, bottom=0.08)
         
-        # Main building visualization with clear context
+        # Main building visualization - PREMIUM DESIGN
         self.ax_layout = self.fig.add_subplot(gs[0:3, 0:3])
-        self.ax_layout.set_title('Building Floor Plan - Real-Time Clearance Status', 
-                                fontsize=11, fontweight='600', pad=10, loc='left',
+        self.ax_layout.set_title('🏢 BUILDING FLOOR PLAN', 
+                                fontsize=12, fontweight='700', pad=12, loc='left',
                                 color=THEME_COLORS['text_primary'])
         self.ax_layout.set_aspect('equal')
-        self.ax_layout.set_facecolor(THEME_COLORS['panel_bg'])
-        self.ax_layout.grid(True, alpha=0.12, linestyle='-', linewidth=0.3, color=THEME_COLORS['grid'])
-        self.ax_layout.tick_params(labelsize=8, colors=THEME_COLORS['text_secondary'])
-        self.ax_layout.set_xlabel('Distance (meters)', fontsize=9, color=THEME_COLORS['text_secondary'])
-        self.ax_layout.set_ylabel('Distance (meters)', fontsize=9, color=THEME_COLORS['text_secondary'])
+        self.ax_layout.set_facecolor('#FAFBFC')  # Clean white-gray background
+        # Enhanced grid for better map appearance
+        self.ax_layout.grid(True, alpha=0.2, linestyle='--', linewidth=0.8, 
+                           color='#CBD5E0', zorder=0)
+        self.ax_layout.tick_params(labelsize=9, colors=THEME_COLORS['text_secondary'], 
+                                   width=1.5, length=4)
+        self.ax_layout.set_xlabel('DISTANCE (meters)', fontsize=10, 
+                                  color=THEME_COLORS['text_secondary'], fontweight='600')
+        self.ax_layout.set_ylabel('DISTANCE (meters)', fontsize=10, 
+                                  color=THEME_COLORS['text_secondary'], fontweight='600')
         
+        # Professional borders with shadow effect
         for spine in self.ax_layout.spines.values():
             spine.set_edgecolor(THEME_COLORS['border'])
-            spine.set_linewidth(0.5)
+            spine.set_linewidth(2)
         
         # Clearance progress graph with clear purpose
         self.ax_progress = self.fig.add_subplot(gs[0, 3:5])
@@ -219,15 +262,7 @@ class LiveSimulationDashboard:
         self.ax_stats.axis('off')
         self.ax_stats.set_facecolor(THEME_COLORS['background'])
         
-        # Time slider at bottom (clean minimal style)
-        self.ax_slider = plt.axes([0.08, 0.02, 0.8, 0.015], facecolor='none')
-        self.time_slider = Slider(
-            self.ax_slider, '', 0, self.duration,
-            valinit=0, valstep=self.dt, color=THEME_COLORS['accent'],
-            track_color=THEME_COLORS['border']
-        )
-        self.time_slider.label.set_visible(False)
-        self.time_slider.on_changed(self._on_slider_change)
+        # REMOVED: Time slider causes major lag - skip it for better performance
         
         # Clean time display
         self.ax_time_display = plt.axes([0.89, 0.02, 0.1, 0.015], facecolor='none')
@@ -262,6 +297,12 @@ class LiveSimulationDashboard:
             fontsize=9, ha='center', va='center',
             fontfamily='sans-serif', color=THEME_COLORS['text_secondary']
         )
+        self.agent_panel_text = self.ax_agents.text(
+            0.05, 0.95, '', transform=self.ax_agents.transAxes,
+            fontsize=9, verticalalignment='top',
+            color=THEME_COLORS['text_primary'], linespacing=1.8
+        )
+        self.agent_panel_text.set_animated(True)
         
         # Time display
         self.time_text = self.ax_time_display.text(
@@ -270,72 +311,130 @@ class LiveSimulationDashboard:
             fontfamily='monospace', color=THEME_COLORS['text_primary'],
             fontweight='500'
         )
+        self.speed_text = self.ax_time_display.text(
+            0.5, 0.2, 'Speed:1.00x', transform=self.ax_time_display.transAxes,
+            fontsize=7, ha='center', va='center',
+            fontfamily='monospace', color=THEME_COLORS['text_secondary']
+        )
+        self._load_reference_images()
     
     def _calculate_layout(self):
-        """Calculate optimal node positions using force-directed layout."""
-        # Check if positions are already set
-        if all(hasattr(node, 'x') and hasattr(node, 'y') and node.x != 0 
-               for node in list(self.world.G.nodes.values())[:min(3, len(self.world.G.nodes))]):
-            return  # Positions already set
+        """Use actual building coordinates from YAML for realistic layout."""
+        # Nodes already have x,y from building YAML - just verify they're loaded
+        has_coords = False
+        for node_id, node in list(self.world.G.nodes.items())[:3]:
+            if hasattr(node, 'x') and hasattr(node, 'y'):
+                has_coords = True
+                break
         
-        if not HAS_NETWORKX:
-            # Use simple circular layout as fallback
-            import math
-            num_nodes = len(self.world.G.nodes)
-            for i, node_id in enumerate(self.world.G.nodes.keys()):
-                node = self.world.G.get_node(node_id)
-                if node:
-                    angle = 2 * math.pi * i / num_nodes
-                    node.x = 50 * math.cos(angle)
-                    node.y = 50 * math.sin(angle)
-            print(f"Node layout calculated using circular fallback")
+        if has_coords:
+            print(f"Using building coordinates from YAML ({len(self.world.G.nodes)} rooms)")
             return
         
-        G_nx = nx.Graph()
-        for node_id in self.world.G.nodes.keys():
-            G_nx.add_node(node_id)
-        for (src, dst), edge in self.world.G.edges.items():
-            if edge.traversable and src < dst:
-                G_nx.add_edge(src, dst, weight=1.0/max(edge.length, 0.1))
-        
-        # Use spring layout with optimization
-        pos = nx.spring_layout(G_nx, k=3, iterations=100, seed=42, scale=100)
-        
-        for node_id, (x, y) in pos.items():
+        # Fallback only if coordinates missing
+        import math
+        num_nodes = len(self.world.G.nodes)
+        for i, node_id in enumerate(self.world.G.nodes.keys()):
             node = self.world.G.get_node(node_id)
             if node:
-                node.x = x
-                node.y = y
-        
-        print(f"Node layout calculated using force-directed algorithm")
+                angle = 2 * math.pi * i / num_nodes
+                node.x = 50 * math.cos(angle)
+                node.y = 50 * math.sin(angle)
+        print(f"Using fallback circular layout")
     
     def _init_visualization(self):
         """Initialize all visual elements with premium styling."""
         self._draw_edges()
         self._draw_nodes()
-        self._init_agents()
+        self._set_axes_limits()
         self._draw_legend()
-        
         if self.advanced:
             self._init_flow_arrows()
+        self._init_agents()
+        self._init_evacuees()
+
+    def _load_reference_images(self):
+        """Display reference PNGs (1_..4_) at the bottom of the dashboard."""
+        candidates = [
+            Path('demo_results'),
+            Path.cwd() / 'demo_results',
+            Path(__file__).resolve().parents[2] / 'demo_results'
+        ]
+        titles = [
+            ('1_building_layout.png', 'Layout'),
+            ('2_clearance_progress.png', 'Progress'),
+            ('3_agent_paths.png', 'Paths'),
+            ('4_complete_dashboard.png', 'Dashboard')
+        ]
+        base = None
+        for cand in candidates:
+            if cand.exists():
+                base = cand
+                break
+        if base is None:
+            return
+        left = 0.05
+        width = 0.2
+        spacing = 0.02
+        bottom = 0.01
+        height = 0.16
+        for idx, (fname, title) in enumerate(titles):
+            path = base / fname
+            if not path.exists():
+                continue
+            try:
+                img = plt.imread(path)
+            except Exception:
+                continue
+            ax = self.fig.add_axes([
+                left + idx * (width + spacing),
+                bottom,
+                width,
+                height
+            ])
+            ax.imshow(img)
+            ax.set_title(title, fontsize=8, color=THEME_COLORS['text_primary'])
+            ax.axis('off')
+            self.reference_axes.append(ax)
+
+    def _set_axes_limits(self):
+        """Set layout axes limits based on node extents for immediate visibility."""
+        if not self.world.G.nodes:
+            return
+        xs = [n.x for n in self.world.G.nodes.values()]
+        ys = [n.y for n in self.world.G.nodes.values()]
+        if not xs or not ys:
+            return
+        pad = 5.0
+        xmin, xmax = min(xs) - pad, max(xs) + pad
+        ymin, ymax = min(ys) - pad, max(ys) + pad
+        # Ensure non-degenerate limits
+        if abs(xmax - xmin) < 1e-3:
+            xmin -= 1
+            xmax += 1
+        if abs(ymax - ymin) < 1e-3:
+            ymin -= 1
+            ymax += 1
+        self.ax_layout.set_xlim(xmin, xmax)
+        self.ax_layout.set_ylim(ymin, ymax)
     
     def _draw_edges(self):
-        """Draw edges with clean, minimal styling."""
+        """Draw edges as subtle connections (map-like)."""
         for (src, dst), edge in self.world.G.edges.items():
             if src < dst:  # Draw each edge once
                 node_src = self.world.G.get_node(src)
                 node_dst = self.world.G.get_node(dst)
                 
                 if node_src and node_dst:
-                    # Clean edge style
-                    alpha = 0.4 if edge.traversable else 0.15
-                    width = 1.5 if edge.traversable else 0.8
+                    # Subtle connection lines (like on a map)
+                    alpha = 0.25 if edge.traversable else 0.1
+                    width = 1.0 if edge.traversable else 0.5
                     
                     line = self.ax_layout.plot(
                         [node_src.x, node_dst.x],
                         [node_src.y, node_dst.y],
-                        color=FLOW_COLORS['none'], linewidth=width, 
-                        linestyle='-', alpha=alpha, zorder=1
+                        color='#C5CAD5', linewidth=width, 
+                        linestyle='--', alpha=alpha, zorder=2
                     )[0]
                     
                     self.edge_artists.append({
@@ -348,118 +447,152 @@ class LiveSimulationDashboard:
                     })
     
     def _draw_nodes(self):
-        """Draw nodes with clear, informative labeling."""
+        """Draw nodes as clean rectangles - OPTIMIZED for performance."""
         for node_id, node in self.world.G.nodes.items():
-            # Determine color and size based on clearance status
+            # Determine room size and styling based on type
+            room_name = getattr(node, 'name', '') or str(node_id)
             if node.node_type == NodeType.EXIT:
+                # Exits - Distinctive green squares
+                width, height = 5, 5
                 color = NODE_STATE_COLORS['exit']
-                size = 500
-                marker = 's'  # Square for exits
-                label_text = f"EXIT\n{node_id}"
-            elif node.cleared:
-                color = NODE_STATE_COLORS['cleared']
-                size = 350
-                marker = 'o'
-                label_text = f"✓\n{node_id}"
+                label_text = room_name if room_name else "EXIT"
+                edgecolor = '#2F855A'
+                edgewidth = 3
+            elif node.node_type == NodeType.CORRIDOR:
+                # Corridors - Elongated rectangles
+                width, height = 7, 3
+                color = NODE_STATE_COLORS['corridor']
+                label_text = room_name
+                edgecolor = '#A0AEC0'
+                edgewidth = 2
             else:
-                color = NODE_STATE_COLORS['unknown']
-                size = 350
-                marker = 'o'
-                label_text = str(node_id)
+                # Regular rooms - sized by area
+                area = getattr(node, 'area', 20)
+                width = height = np.sqrt(area) * 0.9
+                
+                if node.cleared:
+                    color = NODE_STATE_COLORS['cleared']
+                    label_text = f"✓ {room_name}"
+                    edgecolor = '#2C5282'
+                    edgewidth = 2.5
+                else:
+                    color = NODE_STATE_COLORS['not_cleared']
+                    label_text = room_name
+                    edgecolor = '#C53030'
+                    edgewidth = 2.5
             
-            # Draw node with clear boundaries
-            scatter = self.ax_layout.scatter(
-                node.x, node.y, c=color, s=size, marker=marker,
-                edgecolors='black', linewidths=1.5, alpha=0.85, zorder=3
+            # Draw room as simple rectangle - FAST!
+            rect = Rectangle(
+                (node.x - width/2, node.y - height/2), 
+                width, height,
+                facecolor=color, edgecolor=edgecolor, linewidth=edgewidth,
+                alpha=0.9, zorder=3
             )
+            self.ax_layout.add_patch(rect)
             
-            # Clear, readable label
+            # Room label
             label = self.ax_layout.text(
                 node.x, node.y, label_text,
-                ha='center', va='center', fontsize=8, fontweight='bold',
-                color='white', zorder=4
+                ha='center', va='center', fontsize=9, fontweight='bold',
+                color='white' if node.node_type != NodeType.CORRIDOR else '#2D3748',
+                zorder=4
             )
             
-            # Prominent hazard warning
+            # Hazard indicator (simple + severity)
             hazard_marker = None
-            hazard_label = None
+            hazard_text = None
             if node.hazard != HazardType.NONE and node.hazard_severity > 0.3:
-                hazard_marker = self.ax_layout.scatter(
-                    node.x + 4, node.y + 4, c=NODE_STATE_COLORS['hazard_high'],
-                    s=120, marker='^', edgecolors='black', linewidths=1.5, 
-                    alpha=0.95, zorder=5
+                hazard_circle = Circle(
+                    (node.x + width/2 - 1, node.y + height/2 - 1), 
+                    0.7,
+                    facecolor='#F56565', edgecolor='#C53030',
+                    linewidth=1.5, alpha=0.95, zorder=5
                 )
-                # Add hazard type label
-                hazard_label = self.ax_layout.text(
-                    node.x + 4, node.y + 7, node.hazard.name[:4],
-                    ha='center', va='bottom', fontsize=6, fontweight='bold',
-                    color=NODE_STATE_COLORS['hazard_high'], zorder=5,
-                    bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.9)
+                self.ax_layout.add_patch(hazard_circle)
+                hazard_marker = hazard_circle
+                hazard_text = self.ax_layout.text(
+                    node.x + width/2 - 1, node.y + height/2 - 1,
+                    f"{int(node.hazard_severity*100)}%",
+                    ha='center', va='center', fontsize=6, fontweight='bold',
+                    color='white', zorder=6
                 )
+            # Fog overlay (semi-transparent rectangle)
+            fog_alpha, fog_color = FOG_COLORS.get(node.fog_state, (0.18, '#4B5563'))
+            fog_overlay = Rectangle(
+                (node.x - width/2, node.y - height/2),
+                width, height,
+                facecolor=fog_color, edgecolor='none',
+                alpha=fog_alpha, zorder=4.2
+            )
+            self.ax_layout.add_patch(fog_overlay)
+            # Occupancy label (number of evacuees inside)
+            occ_count = len(node.evacuees)
+            occ_label = self.ax_layout.text(
+                node.x, node.y - height/2 - 0.8,
+                f"Evac:{occ_count}", fontsize=6, fontweight='bold',
+                ha='center', va='top', color=THEME_COLORS['text_secondary'],
+                zorder=5
+            )
             
             self.node_artists[node_id] = {
-                'scatter': scatter,
+                'rect': rect,
                 'label': label,
                 'node': node,
                 'hazard_marker': hazard_marker,
-                'hazard_label': hazard_label
+                'hazard_label': hazard_text,
+                'fog_overlay': fog_overlay,
+                'occupancy_label': occ_label,
+                'width': width,
+                'height': height
             }
     
     def _init_agents(self):
-        """Initialize agent visual elements with clean styling but full functionality."""
+        """Initialize agent visual elements - supports ultra-fast scatter mode."""
+        positions = []
+        colors = []
+        self._agent_id_order = []
         for agent in self.world.agents:
             node = self.world.G.get_node(agent.node)
             if not node:
                 continue
-            
-            color = ROLE_COLORS.get(agent.role, THEME_COLORS['text_secondary'])
-            
-            # Clean agent marker (larger, cleaner circles)
-            marker = self.ax_layout.scatter(
-                node.x, node.y, c=color, s=350, marker='o',
-                edgecolors='white', linewidths=2.5, alpha=0.95, zorder=6
-            )
-            
-            # Agent ID label inside circle
-            label = self.ax_layout.text(
-                node.x, node.y, f"{agent.id}",
-                fontsize=10, fontweight='600', ha='center', va='center',
-                color='white', zorder=7
-            )
-            
-            # Role indicator - small text below
-            role_label = self.ax_layout.text(
-                node.x, node.y - 4, agent.role.name[:3],
-                fontsize=7, fontweight='500', ha='center', va='top',
-                color=color, zorder=7,
-                bbox=dict(boxstyle='round,pad=0.2', facecolor='white', 
-                         edgecolor=color, linewidth=1, alpha=0.9)
-            )
-            
-            # Clean trail line
-            trail, = self.ax_layout.plot(
-                [], [], '-', color=color, linewidth=2, alpha=0.35, zorder=2
-            )
-            
-            # Status indicator (small dot above agent)
-            status_indicator = self.ax_layout.scatter(
-                node.x, node.y + 3, c=THEME_COLORS['success'], s=60, marker='o',
-                edgecolors='white', linewidths=1.5, alpha=0.9, zorder=7
-            )
-            
+            positions.append([node.x, node.y])
+            colors.append(ROLE_COLORS.get(agent.role, THEME_COLORS['text_secondary']))
+            self._agent_id_order.append(agent.id)
             self.agent_artists[agent.id] = {
-                'marker': marker,
-                'label': label,
-                'role_label': role_label,
-                'trail': trail,
-                'status_indicator': status_indicator,
-                'color': color,
-                'path_x': deque([node.x], maxlen=50),
-                'path_y': deque([node.y], maxlen=50),
+                'color': colors[-1],
+                'path_x': deque([node.x], maxlen=60),
+                'path_y': deque([node.y], maxlen=60),
+                'current_x': node.x,
+                'current_y': node.y,
                 'target_x': node.x,
                 'target_y': node.y,
-                'interp_progress': 0.0
+                'interp_progress': 1.0,
+                'last_node': agent.node
             }
+        if positions:
+            pos_arr = np.array(positions)
+            color_arr = np.array(colors)
+        else:
+            pos_arr = np.empty((0, 2))
+            color_arr = np.empty((0,))
+        self._agent_colors = color_arr
+        self.agent_scatter = self.ax_layout.scatter(
+            pos_arr[:, 0] if pos_arr.size else np.array([]),
+            pos_arr[:, 1] if pos_arr.size else np.array([]),
+            s=36, c=color_arr if color_arr.size else '#2563EB', marker='o', linewidths=0,
+            zorder=10, animated=True
+        )
+        # Agent labels (ID + role)
+        for agent_id, agent in zip(self._agent_id_order, self.world.agents):
+            node = self.world.G.get_node(agent.node)
+            if not node:
+                continue
+            label = self.ax_layout.text(
+                node.x, node.y + 1.2,
+                f"A{agent.id}:{agent.role.name[0]}", fontsize=7, fontweight='bold',
+                ha='center', va='bottom', color='#111827', zorder=11
+            )
+            self.agent_labels[agent.id] = label
     
     def _init_flow_arrows(self):
         """Initialize flow direction arrows for advanced visualization."""
@@ -467,106 +600,264 @@ class LiveSimulationDashboard:
         # Will be populated dynamically during updates
     
     def _draw_legend(self):
-        """Draw comprehensive, informative legend."""
-        # Room status legend
+        """Draw clean, simple legends - OPTIMIZED."""
+        # Room status legend - simple rectangles
         room_elements = [
-            mpatches.Patch(facecolor=NODE_STATE_COLORS['exit'], 
-                          edgecolor='black', linewidth=1, label='EXIT (Safe Zone)'),
-            mpatches.Patch(facecolor=NODE_STATE_COLORS['cleared'], 
-                          edgecolor='black', linewidth=1, label='✓ Cleared Room'),
-            mpatches.Patch(facecolor=NODE_STATE_COLORS['in_progress'], 
-                          edgecolor='black', linewidth=1, label='⚙ Clearing in Progress'),
-            mpatches.Patch(facecolor=NODE_STATE_COLORS['not_cleared'], 
-                          edgecolor='black', linewidth=1, label='✗ Uncleared Room'),
-            mpatches.Patch(facecolor=NODE_STATE_COLORS['unknown'], 
-                          edgecolor='black', linewidth=1, label='? Unknown Area'),
+            mpatches.Rectangle((0, 0), 1, 1, 
+                facecolor=NODE_STATE_COLORS['exit'], 
+                edgecolor='#2F855A', linewidth=2, 
+                label='EXIT'),
+            mpatches.Rectangle((0, 0), 1, 1, 
+                facecolor=NODE_STATE_COLORS['corridor'], 
+                edgecolor='#A0AEC0', linewidth=1.5, 
+                label='Corridor'),
+            mpatches.Rectangle((0, 0), 1, 1,
+                facecolor=NODE_STATE_COLORS['cleared'], 
+                edgecolor='#2C5282', linewidth=1.5, 
+                label='Cleared'),
+            mpatches.Rectangle((0, 0), 1, 1,
+                facecolor=NODE_STATE_COLORS['in_progress'], 
+                edgecolor='#C05621', linewidth=1.5, 
+                label='In Progress'),
+            mpatches.Rectangle((0, 0), 1, 1,
+                facecolor=NODE_STATE_COLORS['not_cleared'], 
+                edgecolor='#C53030', linewidth=1.5, 
+                label='Uncleared'),
         ]
         
-        # Agent role legend
+        # Agent role legend - simple circles
         agent_elements = [
             plt.Line2D([0], [0], marker='o', color='w', 
                       markerfacecolor=ROLE_COLORS[Role.SCOUT], markersize=10,
-                      markeredgecolor='black', markeredgewidth=1.5,
-                      label='SCOUT (Fast recon)'),
+                      markeredgecolor='white', markeredgewidth=2,
+                      label='SCOUT'),
             plt.Line2D([0], [0], marker='o', color='w', 
                       markerfacecolor=ROLE_COLORS[Role.SECURER], markersize=10,
-                      markeredgecolor='black', markeredgewidth=1.5,
-                      label='SECURER (Assist evac)'),
+                      markeredgecolor='white', markeredgewidth=2,
+                      label='SECURER'),
             plt.Line2D([0], [0], marker='o', color='w', 
                       markerfacecolor=ROLE_COLORS[Role.CHECKPOINTER], markersize=10,
-                      markeredgecolor='black', markeredgewidth=1.5,
-                      label='CHECKPOINT (Secure areas)'),
+                      markeredgecolor='white', markeredgewidth=2,
+                      label='CHECKPOINT'),
             plt.Line2D([0], [0], marker='o', color='w', 
                       markerfacecolor=ROLE_COLORS[Role.EVACUATOR], markersize=10,
-                      markeredgecolor='black', markeredgewidth=1.5,
-                      label='EVACUATOR (Final sweep)'),
+                      markeredgecolor='white', markeredgewidth=2,
+                      label='EVACUATOR'),
         ]
         
-        # Create two separate legends
+        # Create clean legends
         legend1 = self.ax_layout.legend(
-            handles=room_elements, loc='upper left', fontsize=7,
-            title='Room Status', title_fontsize=8,
-            frameon=True, fancybox=False, shadow=False
+            handles=room_elements, loc='upper left', fontsize=8,
+            title='ROOM STATUS', title_fontsize=8,
+            frameon=True, fancybox=False, shadow=False,
+            framealpha=0.95, edgecolor=THEME_COLORS['border']
         )
-        legend1.get_frame().set_facecolor(THEME_COLORS['panel_bg'])
-        legend1.get_frame().set_edgecolor(THEME_COLORS['border'])
-        legend1.get_frame().set_linewidth=1
-        legend1.get_frame().set_alpha(0.95)
-        
-        # Add second legend manually
+        legend1.get_frame().set_facecolor('white')
+        legend1.get_frame().set_linewidth(1.5)
+        legend1.get_title().set_fontweight('bold')
+
+        # Add second legend
         self.ax_layout.add_artist(legend1)
         legend2 = self.ax_layout.legend(
-            handles=agent_elements, loc='lower left', fontsize=7,
-            title='Responder Roles (HASO)', title_fontsize=8,
-            frameon=True, fancybox=False, shadow=False
+            handles=agent_elements, loc='lower left', fontsize=8,
+            title='AGENT ROLES', title_fontsize=8,
+            frameon=True, fancybox=False, shadow=False,
+            framealpha=0.95, edgecolor=THEME_COLORS['border']
         )
-        legend2.get_frame().set_facecolor(THEME_COLORS['panel_bg'])
-        legend2.get_frame().set_edgecolor(THEME_COLORS['border'])
-        legend2.get_frame().set_linewidth(1)
-        legend2.get_frame().set_alpha(0.95)
+        legend2.get_frame().set_facecolor('white')
+        legend2.get_frame().set_linewidth(1.5)
+        legend2.get_title().set_fontweight('bold')
     
     def _interpolate_agent_position(self, agent: Agent) -> Tuple[float, float]:
         """
-        Calculate smooth agent position with interpolation.
+        Calculate smooth agent position using world movement tracker.
         
         Returns:
             (x, y) interpolated position
         """
         current_node = self.world.G.get_node(agent.node)
         if not current_node:
-            return (0, 0)
+            return (0.0, 0.0)
         
-        # Get stored agent state
         agent_state = self.agent_artists.get(agent.id)
         if not agent_state:
             return (current_node.x, current_node.y)
         
-        # Check if agent has moved to a new node
-        if agent_state['target_x'] != current_node.x or agent_state['target_y'] != current_node.y:
-            # Reset interpolation for new target
-            agent_state['target_x'] = current_node.x
-            agent_state['target_y'] = current_node.y
-            agent_state['interp_progress'] = 0.0
+        movement = self.world.movement_tracker.get(agent.id)
+        if movement:
+            start_node = self.world.G.get_node(movement.get('start_node'))
+            end_node = self.world.G.get_node(movement.get('end_node'))
+            if start_node and end_node:
+                start_time = movement.get('start_time', self.world.time)
+                end_time = movement.get('end_time', self.world.time)
+                duration = max(1e-6, end_time - start_time)
+                progress = (self.world.time - start_time) / duration
+                progress = max(0.0, min(1.0, progress))
+                x = start_node.x + (end_node.x - start_node.x) * progress
+                y = start_node.y + (end_node.y - start_node.y) * progress
+                agent_state['current_x'] = x
+                agent_state['current_y'] = y
+                agent_state['target_x'] = end_node.x
+                agent_state['target_y'] = end_node.y
+                agent_state['interp_progress'] = progress
+                agent_state['last_node'] = agent.node
+                return (x, y)
         
-        # Interpolate based on movement speed
-        if agent.status in [Status.NORMAL, Status.SLOWED]:
-            agent_state['interp_progress'] = min(1.0, agent_state['interp_progress'] + 0.15)
-        else:
-            agent_state['interp_progress'] = 1.0
-        
-        # Calculate interpolated position
-        progress = agent_state['interp_progress']
-        current_x = agent_state['path_x'][-1] if agent_state['path_x'] else current_node.x
-        current_y = agent_state['path_y'][-1] if agent_state['path_y'] else current_node.y
-        
-        x = current_x + (current_node.x - current_x) * progress
-        y = current_y + (current_node.y - current_y) * progress
-        
-        return (x, y)
+        # Fallback: agent stationary at current node
+        agent_state['current_x'] = current_node.x
+        agent_state['current_y'] = current_node.y
+        agent_state['target_x'] = current_node.x
+        agent_state['target_y'] = current_node.y
+        agent_state['interp_progress'] = 1.0
+        agent_state['last_node'] = agent.node
+        return (current_node.x, current_node.y)
+    
+    def _nearest_exit(self, start: int) -> Optional[int]:
+        exits = self.world.G.exits
+        if not exits:
+            return None
+        # Pick closest by Euclidean distance
+        return min(exits, key=lambda e: self.world.G.distance(start, e))
+
+    def _path_any(self, start: int, goal: int) -> Optional[List[int]]:
+        """Fast A* path ignoring fog; respects traversable/open edges."""
+        if start == goal:
+            return [start]
+        from heapq import heappush, heappop
+        G = self.world.G
+        open_set = []
+        heappush(open_set, (0.0, start))
+        came_from = {}
+        g_score = {start: 0.0}
+        f_score = {start: G.distance(start, goal)}
+        while open_set:
+            _, current = heappop(open_set)
+            if current == goal:
+                path = [current]
+                while current in came_from:
+                    current = came_from[current]
+                    path.append(current)
+                return list(reversed(path))
+            for neighbor in G.neighbors(current):
+                edge = G.get_edge(current, neighbor)
+                if not edge or not edge.traversable or not edge.is_open:
+                    continue
+                # Use evac base speed 1.2 m/s for timing heuristic
+                cost = edge.get_traversal_time(base_speed=1.2, hazard_modifier=self.world.get_hazard_modifier(neighbor))
+                tentative = g_score[current] + cost
+                if neighbor not in g_score or tentative < g_score[neighbor]:
+                    came_from[neighbor] = current
+                    g_score[neighbor] = tentative
+                    f_score[neighbor] = tentative + G.distance(neighbor, goal)
+                    heappush(open_set, (f_score[neighbor], neighbor))
+        return None
+
+    def _init_evacuees(self):
+        """Create evacuee scatter and movement state."""
+        positions = []
+        colors = []
+        for node in self.world.G.nodes.values():
+            if not node.evacuees:
+                continue
+            for evac in node.evacuees:
+                # Start moving by default so we always see motion
+                needs_help = getattr(evac, 'needs_assistance', False)
+                start_moving = True
+                # Minimum visible speed; boosted when assisted
+                speed = max(0.3, 1.0 * getattr(evac, 'speed_multiplier', 1.0))
+                # Compute path to nearest exit
+                goal = self._nearest_exit(evac.node)
+                path = self._path_any(evac.node, goal) if goal is not None else [evac.node]
+                state = {
+                    'id': evac.id,
+                    'node': evac.node,
+                    'outside': getattr(evac, 'outside', False),
+                    'moving': bool(start_moving),
+                    'needs_help': bool(needs_help),
+                    'speed': max(0.1, speed),
+                    'path': path or [evac.node],  # list of node ids
+                    'seg_idx': 0,                # index of current segment start in path
+                    'seg_progress': 1.0,         # force initialize first segment
+                    'x': node.x,
+                    'y': node.y,
+                }
+                positions.append([node.x, node.y])
+                # Color: moving evacuees = dark blue, waiting = gray
+                colors.append('#2563EB' if state['moving'] else '#9CA3AF')
+                self._evacuees.append(state)
+        if positions:
+            self.evacuee_scatter = self.ax_layout.scatter(
+                np.array(positions)[:, 0], np.array(positions)[:, 1],
+                s=20, c=np.array(colors), marker='o', linewidths=0, alpha=0.9, zorder=9, animated=True
+            )
+
+    def _update_evacuees(self, current_time: float) -> None:
+        """Advance evacuees along paths; start evac when assisted."""
+        if not self._evacuees:
+            return
+        positions = []
+        agents_by_node = {}
+        for a in self.world.agents:
+            agents_by_node.setdefault(a.node, []).append(a)
+        for e in self._evacuees:
+            if e['outside']:
+                positions.append([e['x'], e['y']])
+                continue
+            if not e['moving'] and e['needs_help']:
+                for a in agents_by_node.get(e['node'], []):
+                    if a.role in (Role.SECURER, Role.EVACUATOR):
+                        e['moving'] = True
+                        e['speed'] = max(e['speed'], 1.0)
+                        break
+            path = e['path']
+            if not path or len(path) <= 1:
+                positions.append([e['x'], e['y']])
+                continue
+            if e['seg_progress'] >= 1.0 or 'start_node' not in e or 'target_node' not in e:
+                if e['seg_idx'] >= len(path) - 1:
+                    last_node = self.world.G.get_node(path[-1])
+                    e['x'] = last_node.x if last_node else e['x']
+                    e['y'] = last_node.y if last_node else e['y']
+                    e['outside'] = True
+                    positions.append([e['x'], e['y']])
+                    continue
+                start_id = path[e['seg_idx']]
+                target_id = path[e['seg_idx'] + 1]
+                e['start_node'] = start_id
+                e['target_node'] = target_id
+                e['seg_progress'] = 0.0
+                s_node = self.world.G.get_node(start_id)
+                if s_node:
+                    e['x'], e['y'] = s_node.x, s_node.y
+            if e['moving']:
+                src = self.world.G.get_node(e['start_node'])
+                dst = self.world.G.get_node(e['target_node'])
+                if src and dst:
+                    edge = self.world.G.get_edge(src.id, dst.id)
+                    hazard_mod = self.world.get_hazard_modifier(dst.id)
+                    seg_time = edge.get_traversal_time(base_speed=e['speed'], hazard_modifier=hazard_mod) if edge else 1.0
+                    seg_time = max(0.05, float(seg_time))
+                    prog_inc = (self.dt * self.speed_multiplier) / seg_time
+                    e['seg_progress'] = min(1.0, e['seg_progress'] + prog_inc)
+                    e['x'] = src.x + (dst.x - src.x) * e['seg_progress']
+                    e['y'] = src.y + (dst.y - src.y) * e['seg_progress']
+                    if e['seg_progress'] >= 1.0:
+                        e['seg_idx'] += 1
+                        if e['seg_idx'] >= len(path) - 1:
+                            if dst.node_type == NodeType.EXIT:
+                                e['outside'] = True
+                positions.append([e['x'], e['y']])
+            else:
+                positions.append([e['x'], e['y']])
+        if self.evacuee_scatter is not None:
+            offsets = np.asarray(positions) if positions else np.empty((0, 2))
+            if offsets.ndim == 1:
+                offsets = offsets.reshape(-1, 2)
+            self.evacuee_scatter.set_offsets(offsets)
     
     def _update_frame(self, frame: int):
         """
-        Update all visualization elements for the current frame.
+        Update all visualization elements for the current frame - OPTIMIZED for smooth playback.
         
         This is the main rendering loop called by FuncAnimation.
         """
@@ -582,131 +873,125 @@ class LiveSimulationDashboard:
         
         current_time = self.world.time
         
-        # Record data
         self._record_frame_data(current_time)
-        
-        # Update all visual elements
         self._update_agents()
+        self._update_evacuees(current_time)
         self._update_nodes()
-        self._update_edges()
-        self._update_progress_plots()
-        self._update_info_panels()
-        self._update_summary(current_time)
-        
-        # Update slider
-        if not self.paused:
-            self.time_slider.set_val(min(current_time, self.duration))
+        if frame % 5 == 0:
+            self._update_edges()
+        if frame % 10 == 0:
+            self._update_progress_plots()
+            self._update_info_panels()
+            self._update_summary(current_time)
         
         self.current_frame = frame
         
-        # Track performance
+        # Track performance (lightweight)
         frame_time = pytime.time() - frame_start_time
+        if len(self.frame_times) > 30:
+            self.frame_times.pop(0)
         self.frame_times.append(frame_time)
-        self.actual_fps = 1.0 / (sum(self.frame_times) / len(self.frame_times))
+        avg = (sum(self.frame_times) / len(self.frame_times)) if self.frame_times else 1e-6
+        self.actual_fps = 1.0 / max(1e-6, avg)
         
         return self._get_artists()
     
     def _record_frame_data(self, current_time: float):
         """Record data for the current frame."""
         self.times.append(current_time)
-        
         cleared, total = self.world.G.get_cleared_count()
         self.cleared_counts.append(cleared)
-        
         discovered = sum(1 for n in self.world.G.nodes.values() if n.fog_state >= 1)
         self.discovered_counts.append(discovered)
-        
-        # Update flow model
-        for (src, dst) in list(self.world.G.edges.keys())[:50]:  # Limit for performance
+        for (src, dst) in list(self.world.G.edges.keys())[:50]:
             flow = self.flow_model.calculate_flow_rate(src, dst)
             self.flow_model.edge_flow[(src, dst)] = flow
-        
         flow_metrics = self.flow_model.get_flow_metrics()
         self.flow_metrics_history.append(flow_metrics)
-        
-        # Store agent positions
         for agent in self.world.agents:
             if agent.id in self.agent_positions_history:
                 x, y = self._interpolate_agent_position(agent)
                 self.agent_positions_history[agent.id].append((x, y, current_time))
     
     def _update_agents(self):
-        """Update agent positions, trails, and status indicators."""
-        for agent in self.world.agents:
-            if agent.id not in self.agent_artists:
+        """Update agent positions - OPTIMIZED for maximum performance."""
+        positions = []
+        agent_by_id = {a.id: a for a in self.world.agents}
+        for agent_id in self._agent_id_order:
+            agent = agent_by_id.get(agent_id)
+            if agent is None:
+                state = self.agent_artists.get(agent_id)
+                if state:
+                    positions.append([state.get('current_x', 0.0), state.get('current_y', 0.0)])
                 continue
-            
+            state = self.agent_artists[agent_id]
             x, y = self._interpolate_agent_position(agent)
-            agent_state = self.agent_artists[agent.id]
-            
-            # Update marker position
-            agent_state['marker'].set_offsets([[x, y]])
-            
-            # Update label position (centered in circle)
-            agent_state['label'].set_position((x, y))
-            
-            # Update role label position
-            agent_state['role_label'].set_position((x, y - 4))
-            
-            # Update trail
-            agent_state['path_x'].append(x)
-            agent_state['path_y'].append(y)
-            agent_state['trail'].set_data(
-                list(agent_state['path_x']),
-                list(agent_state['path_y'])
-            )
-            
-            # Update status indicator color and position
-            status_colors = {
-                Status.NORMAL: THEME_COLORS['success'],
-                Status.SLOWED: THEME_COLORS['warning'],
-                Status.PROGRESSING: THEME_COLORS['info'],
-                Status.IMMOBILIZED: THEME_COLORS['danger'],
-                Status.INCAPACITATED: THEME_COLORS['text_secondary'],
-            }
-            status_color = status_colors.get(agent.status, THEME_COLORS['text_secondary'])
-            agent_state['status_indicator'].set_facecolors([status_color])
-            agent_state['status_indicator'].set_offsets([[x, y + 3]])
+            last_x = state['path_x'][-1]
+            last_y = state['path_y'][-1]
+            if abs(x - last_x) > 0.05 or abs(y - last_y) > 0.05:
+                state['path_x'].append(x)
+                state['path_y'].append(y)
+            positions.append([x, y])
+            label = self.agent_labels.get(agent_id)
+            if label:
+                role_char = agent.role.name[0]
+                label.set_position((x, y + 1.2))
+                label.set_text(f"A{agent.id}:{role_char}")
+        if self.agent_scatter is not None:
+            offsets = np.asarray(positions) if positions else np.empty((0, 2))
+            if offsets.ndim == 1:
+                offsets = offsets.reshape(-1, 2)
+            self.agent_scatter.set_offsets(offsets)
     
     def _update_nodes(self):
-        """Update node colors based on clearance and hazard states."""
+        """Update node colors with smooth transitions."""
         for node_id, artists in self.node_artists.items():
             node = artists['node']
             
-            # Determine color based on multiple factors
+            # Determine color (simplified logic for speed)
             if node.node_type == NodeType.EXIT:
-                color = NODE_STATE_COLORS['exit']
-            elif node.cleared:
-                color = NODE_STATE_COLORS['cleared']
+                continue  # Exits never change color
+            elif node.node_type == NodeType.CORRIDOR:
+                continue  # Corridors don't change much
+            elif node.cleared and not artists.get('was_cleared'):
+                # Room just cleared! Update with celebration effect
+                artists['rect'].set_facecolor(NODE_STATE_COLORS['cleared'])
+                artists['rect'].set_edgecolor('#2C5282')
+                artists['rect'].set_linewidth(2.5)
+                room_display = getattr(node, 'name', '') or str(node_id)
+                artists['label'].set_text(f"✓ {room_display}")
+                artists['was_cleared'] = True
             elif any(a.node == node_id for a in self.world.agents):
-                color = NODE_STATE_COLORS['in_progress']
-            elif node.fog_state == 0:
-                color = NODE_STATE_COLORS['unknown']
-            else:
-                # Color based on hazard if present
-                if node.hazard != HazardType.NONE and node.hazard_severity > 0.5:
-                    color = NODE_STATE_COLORS['hazard_high']
-                elif node.hazard != HazardType.NONE and node.hazard_severity > 0.2:
-                    color = NODE_STATE_COLORS['hazard_medium']
-                else:
-                    color = NODE_STATE_COLORS['not_cleared']
-            
-            # Apply color with alpha based on visibility
-            alpha = 0.85 * node.visibility if hasattr(node, 'visibility') else 0.85
-            artists['scatter'].set_facecolors([color])
-            artists['scatter'].set_alpha(alpha)
-            
-            # Update hazard marker
+                # Agent currently in this room (clearing in progress)
+                if not node.cleared:
+                    artists['rect'].set_facecolor(NODE_STATE_COLORS['in_progress'])
+                    artists['rect'].set_edgecolor('#C05621')
+            elif not node.cleared and not any(a.node == node_id for a in self.world.agents):
+                # Not cleared and no agents present
+                if not artists.get('was_cleared'):
+                    artists['rect'].set_facecolor(NODE_STATE_COLORS['not_cleared'])
+                    artists['rect'].set_edgecolor('#C53030')
+            # Update hazard label if present
             if node.hazard != HazardType.NONE and node.hazard_severity > 0.3:
-                if artists['hazard_marker'] is None:
-                    artists['hazard_marker'] = self.ax_layout.scatter(
-                        node.x + 2, node.y + 2, c=NODE_STATE_COLORS['hazard_high'],
-                        s=100, marker='^', edgecolors='black', linewidths=1, 
-                        alpha=0.9, zorder=5
-                    )
-            elif artists['hazard_marker'] is not None:
-                artists['hazard_marker'].remove()
-                artists['hazard_marker'] = None
+                if artists.get('hazard_marker') is not None:
+                    artists['hazard_marker'].set_visible(True)
+                if artists.get('hazard_label') is not None:
+                    artists['hazard_label'].set_text(f"{int(node.hazard_severity * 100)}%")
+                    artists['hazard_label'].set_visible(True)
+            else:
+                if artists.get('hazard_marker') is not None:
+                    artists['hazard_marker'].set_visible(False)
+                if artists.get('hazard_label') is not None:
+                    artists['hazard_label'].set_visible(False)
+            # Update fog overlay
+            fog_alpha, fog_color = FOG_COLORS.get(node.fog_state, (0.18, '#4B5563'))
+            fog_overlay = artists.get('fog_overlay')
+            if fog_overlay:
+                fog_overlay.set_alpha(fog_alpha)
+                fog_overlay.set_facecolor(fog_color)
+            occ_label = artists.get('occupancy_label')
+            if occ_label:
+                occ_label.set_text(f"Evac:{len(node.evacuees)}")
     
     def _update_edges(self):
         """Update edge visualization based on flow dynamics."""
@@ -747,45 +1032,25 @@ class LiveSimulationDashboard:
             self.line_discovered.set_data(self.times, self.discovered_counts)
     
     def _update_info_panels(self):
-        """Update agent information with detailed status."""
+        """Update agent information with detailed status - SIMPLIFIED."""
         agent_lines = []
         
-        # Header
-        agent_lines.append("ID  ROLE           STATUS      LOCATION  CLEARED  ZONE")
-        agent_lines.append("─" * 58)
-        
         for agent in self.world.agents:
-            # Status description
-            status_desc = {
-                Status.NORMAL: 'Active    ',
-                Status.SLOWED: 'Slowed    ',
-                Status.PROGRESSING: 'Clearing  ',
-                Status.IMMOBILIZED: 'Stopped   ',
-                Status.INCAPACITATED: 'Down      ',
-            }.get(agent.status, 'Unknown   ')
+            status_icon = {
+                Status.NORMAL: '●',
+                Status.SLOWED: '◐',
+                Status.PROGRESSING: '⚙',
+                Status.IMMOBILIZED: '○',
+                Status.INCAPACITATED: '✕',
+            }.get(agent.status, '○')
             
-            # Get zone assignment
             zone = self.world.agent_zones.get(agent.id, -1)
-            zone_str = f"Z{zone}" if zone >= 0 else "--"
-            
             agent_lines.append(
-                f"{agent.id:<3} {agent.role.name[:12]:<12}  {status_desc}  "
-                f"Room {agent.node:<3}  {agent.rooms_cleared:>3}      {zone_str}"
+                f"{status_icon} A{agent.id} {agent.role.name[:4]} | Room{agent.node} | Cleared:{agent.rooms_cleared} | Z{zone}"
             )
         
-        agent_text = "\n".join(agent_lines)
-        
-        self.ax_agents.clear()
-        self.ax_agents.set_title('Responder Team Status - HASO Role Assignment', 
-                                fontsize=10, fontweight='600',
-                                color=THEME_COLORS['text_primary'], pad=8, loc='left')
-        self.ax_agents.axis('off')
-        self.ax_agents.set_facecolor(THEME_COLORS['panel_bg'])
-        self.ax_agents.text(
-            0.05, 0.95, agent_text, transform=self.ax_agents.transAxes,
-            fontsize=8, verticalalignment='top', fontfamily='monospace',
-            color=THEME_COLORS['text_primary'], linespacing=1.4
-        )
+        agent_text = "\n\n".join(agent_lines)
+        self.agent_panel_text.set_text(agent_text)
     
     def _update_summary(self, current_time: float):
         """Update clean summary statistics display."""
@@ -821,25 +1086,35 @@ class LiveSimulationDashboard:
     
     def _get_artists(self):
         """Collect all matplotlib artists for blitting."""
-        artists = [
-            self.stats_text, self.time_text,
-            self.line_cleared, self.line_discovered
-        ]
-        
-        for agent_art in self.agent_artists.values():
-            artists.extend([
-                agent_art['marker'], agent_art['label'], agent_art['role_label'],
-                agent_art['trail'], agent_art['status_indicator']
-            ])
-        
-        for node_art in self.node_artists.values():
-            artists.append(node_art['scatter'])
-            if node_art['hazard_marker'] is not None:
-                artists.append(node_art['hazard_marker'])
-        
+        artists = []
+        if self.agent_scatter is not None:
+            artists.append(self.agent_scatter)
+        if self.evacuee_scatter is not None:
+            artists.append(self.evacuee_scatter)
         for edge_art in self.edge_artists:
             artists.append(edge_art['line'])
-        
+        for node_art in self.node_artists.values():
+            artists.append(node_art['rect'])
+            artists.append(node_art['label'])
+            if node_art.get('hazard_marker') is not None:
+                artists.append(node_art['hazard_marker'])
+            if node_art.get('hazard_label') is not None:
+                artists.append(node_art['hazard_label'])
+            if node_art.get('fog_overlay') is not None:
+                artists.append(node_art['fog_overlay'])
+            if node_art.get('occupancy_label') is not None:
+                artists.append(node_art['occupancy_label'])
+        artists.extend([
+            self.stats_text,
+            self.time_text,
+            self.speed_text,
+            self.line_cleared,
+            self.line_discovered,
+            self.agent_panel_text,
+        ])
+        artists.extend(self.agent_labels.values())
+        for ax in self.reference_axes:
+            artists.extend(ax.get_children())
         return artists
     
     def _on_slider_change(self, val):
@@ -882,9 +1157,6 @@ class LiveSimulationDashboard:
             save_video: If True, render to video file instead of displaying
             video_path: Output video file path
         """
-        # Connect event handlers
-        self.fig.canvas.mpl_connect('key_press_event', self._on_key_press)
-        
         # Create animation
         print(f"\nStarting animation: {self.total_frames} frames at {self.fps} FPS")
         print(f"Agents scheduled: {len(self.world._event_queue)} initial events")
@@ -893,7 +1165,7 @@ class LiveSimulationDashboard:
             self.fig,
             self._update_frame,
             frames=self.total_frames,
-            interval=1000 / self.fps,
+            interval=1000.0 / max(1, self.fps),
             blit=False,
             repeat=False,
             cache_frame_data=False  # Prevent caching for smoother playback
@@ -916,12 +1188,11 @@ class LiveSimulationDashboard:
                 print(f"[ERROR] Error saving video: {e}")
                 print("  Make sure ffmpeg is installed and in your PATH")
         else:
-            print("Displaying interactive dashboard...")
-            print("Use keyboard controls to interact with the simulation")
+            print("Displaying dashboard...")
             plt.show()
 
 
-def create_live_visualization(world: World, fps: int = 10, duration: float = 300.0,
+def create_live_visualization(world: World, fps: int = 120, duration: float = 300.0,
                               save_video: bool = False, video_path: str = 'evacuation_sim.mp4',
                               advanced: bool = True):
     """
@@ -929,7 +1200,7 @@ def create_live_visualization(world: World, fps: int = 10, duration: float = 300
     
     Args:
         world: Initialized World simulation instance
-        fps: Target frames per second (10-30 recommended)
+        fps: Target frames per second (120 default for ultra smooth animation)
         duration: Total simulation duration in seconds
         save_video: If True, render to video file
         video_path: Output video file path

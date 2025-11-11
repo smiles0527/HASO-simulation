@@ -187,6 +187,9 @@ class World:
         
         # Policies (attached externally)
         self.policies: Dict[Role, Callable] = {}
+        
+        # Visualization helper: track active agent movements between nodes
+        self.movement_tracker: Dict[int, Dict[str, Any]] = {}
     
     def init_fog(self, known_nodes: List[int]) -> None:
         """Initialize fog of war with known starting nodes."""
@@ -213,6 +216,20 @@ class World:
         )
         self._event_counter += 1
         heapq.heappush(self._event_queue, event)
+    
+    def register_agent_movement(self, agent_id: int, start_node: int, end_node: int, travel_time: float) -> None:
+        """Register an agent moving between two nodes for visualization."""
+        self.movement_tracker[agent_id] = {
+            "start_node": start_node,
+            "end_node": end_node,
+            "start_time": self.time,
+            "end_time": self.time + float(max(0.0, travel_time)),
+            "travel_time": float(max(0.01, travel_time)),
+        }
+    
+    def finish_agent_movement(self, agent_id: int) -> None:
+        """Clear movement tracking when agent arrives."""
+        self.movement_tracker.pop(agent_id, None)
     
     def step(self, dt: float) -> None:
         """

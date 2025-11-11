@@ -115,8 +115,8 @@ For more information, see docs/LIVE_ANIMATION.md
     # Simulation parameters
     parser.add_argument('--duration', type=float, default=300.0,
                        help='Simulation duration in seconds (default: 300)')
-    parser.add_argument('--fps', type=int, default=10,
-                       help='Frames per second - higher is smoother but slower (default: 10)')
+    parser.add_argument('--fps', type=int, default=120,
+                       help='Frames per second (default: 120 for ultra-smooth dots)')
     parser.add_argument('--seed', type=int, default=42,
                        help='Random seed for reproducibility (default: 42)')
     
@@ -127,8 +127,6 @@ For more information, see docs/LIVE_ANIMATION.md
                        help='Output video filename (default: evacuation_simulation.mp4)')
     
     # Advanced options
-    parser.add_argument('--no-advanced', action='store_true',
-                       help='Disable advanced rendering features for better performance')
     parser.add_argument('--quiet', action='store_true',
                        help='Suppress detailed progress messages')
     
@@ -168,7 +166,6 @@ def print_simulation_info(world, args):
     print(f"  Simulation Duration: {args.duration:.0f} seconds")
     print(f"  Frame Rate:          {args.fps} FPS")
     print(f"  Total Frames:        {int(args.duration * args.fps)}")
-    print(f"  Advanced Features:   {'Enabled' if not args.no_advanced else 'Disabled'}")
     print()
     
     if args.save_video:
@@ -279,8 +276,7 @@ def main():
         print("[OK] World built successfully\n")
         print_simulation_info(world, args)
     
-    if not args.save_video and not args.quiet:
-        print_controls()
+    # No interactive controls output by default for cleaner UX
     
     # Launch visualization
     if args.save_video:
@@ -302,8 +298,7 @@ def main():
             fps=args.fps,
             duration=args.duration,
             save_video=args.save_video,
-            video_path=args.video_path,
-            advanced=not args.no_advanced
+            video_path=args.video_path
         )
         
         end_time = time.time()
