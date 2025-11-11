@@ -115,8 +115,8 @@ For more information, see docs/LIVE_ANIMATION.md
     # Simulation parameters
     parser.add_argument('--duration', type=float, default=300.0,
                        help='Simulation duration in seconds (default: 300)')
-    parser.add_argument('--fps', type=int, default=120,
-                       help='Frames per second (default: 120 for ultra-smooth dots)')
+    parser.add_argument('--fps', type=int, default=20,
+                       help='Frames per second (default: 20 for smooth playback)')
     parser.add_argument('--seed', type=int, default=42,
                        help='Random seed for reproducibility (default: 42)')
     
@@ -293,12 +293,17 @@ def main():
     start_time = time.time()
     
     try:
+        advanced_flag = getattr(args, 'simple', None)
+        use_advanced = not advanced_flag if isinstance(advanced_flag, bool) else True
+
         dashboard = create_live_visualization(
             world,
             fps=args.fps,
             duration=args.duration,
             save_video=args.save_video,
-            video_path=args.video_path
+            video_path=args.video_path,
+            advanced=use_advanced,
+            quiet=args.quiet
         )
         
         end_time = time.time()

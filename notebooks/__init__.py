@@ -153,7 +153,12 @@ def simulate(
 
     # all_cleared flag (if world.cleared exists)
     all_cleared = False
-    if hasattr(world, "cleared") and isinstance(world.cleared, dict):
+    if hasattr(world, "all_rooms_cleared"):
+        try:
+            all_cleared = bool(world.all_rooms_cleared())
+        except TypeError:
+            all_cleared = bool(world.all_rooms_cleared)
+    elif hasattr(world, "cleared") and isinstance(world.cleared, dict):
         all_cleared = all(world.cleared.values()) if world.cleared else False
 
     # Try to animate if requested and available
