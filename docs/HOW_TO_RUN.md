@@ -2,6 +2,20 @@
 
 # How to Run the Simulation - Step by Step
 
+## Method 0: Scenario Launcher (interactive menu)
+
+```bash
+python launch_simulation.py
+```
+
+This opens a start-menu style interface where you can pick a curated scenario,
+tweak responder counts, scale hazards or evacuee density, and choose between a
+live dashboard or a headless run with automatic reporting. It is the fastest
+way to explore the new Innovation Hub, Medical Pavilion, and Transit Atrium
+layouts.
+
+---
+
 ## Method 1: Quick Test (30 seconds)
 
 **Open your terminal in this folder and run:**
