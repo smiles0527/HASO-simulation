@@ -165,6 +165,18 @@ class LiveSimulationDashboard:
         # Caches to skip redundant drawing work
         self.node_cache: Dict[int, Dict[str, Any]] = {}
         self.edge_cache: Dict[Tuple[int, int], str] = {}
+        self._exit_nodes = [node for node in self.world.G.nodes.values() if node.node_type == NodeType.EXIT]
+        self._room_nodes = [
+            node for node in self.world.G.nodes.values()
+            if node.node_type not in [NodeType.CORRIDOR, NodeType.EXIT, NodeType.CHECKPOINT]
+        ]
+        self._total_evacuees = sum(len(node.evacuees) for node in self.world.G.nodes.values())
+        self._last_agent_panel_text: str = ""
+        self._last_stats_text: str = ""
+        self._last_time_text: str = ""
+        self._speed_levels = [0.25, 0.5, 1.0, 2.0, 5.0]
+        self._speed_index = self._speed_levels.index(1.0) if 1.0 in self._speed_levels else 0
+        self._control_buttons: Dict[str, Button] = {}
         
         # Performance tracking
         self.frame_times = deque(maxlen=30)
@@ -216,7 +228,7 @@ class LiveSimulationDashboard:
         # Use clean style
         plt.style.use('default')
         
-        self.fig = plt.figure(figsize=(20, 11), facecolor=THEME_COLORS['background'])
+        self.fig = plt.figure(figsize=(22, 12), facecolor=THEME_COLORS['background'])
         # Hide toolbar where supported to remove controls
         try:
             self.fig.canvas.toolbar_visible = False  # Matplotlib >= 3.7
@@ -235,8 +247,17 @@ class LiveSimulationDashboard:
                      style='italic')
         
         # Simplified grid layout - focus on main visualization
-        gs = self.fig.add_gridspec(4, 5, hspace=0.25, wspace=0.3,
-                                   left=0.05, right=0.95, top=0.94, bottom=0.08)
+        gs = self.fig.add_gridspec(
+            4, 5,
+            height_ratios=[1.25, 1.25, 1.15, 0.85],
+            width_ratios=[3.6, 3.6, 3.6, 2.5, 2.5],
+            hspace=0.32,
+            wspace=0.34,
+            left=0.035,
+            right=0.97,
+            top=0.94,
+            bottom=0.06,
+        )
         
         # Main building visualization - PREMIUM DESIGN
         self.ax_layout = self.fig.add_subplot(gs[0:3, 0:3])
@@ -347,6 +368,7 @@ class LiveSimulationDashboard:
         )
         self.speed_text.set_animated(False)
         self._load_reference_images()
+        self._setup_controls()
     
     def _calculate_layout(self):
         """Use actual building coordinates from YAML for realistic layout."""
@@ -403,10 +425,10 @@ class LiveSimulationDashboard:
         if base is None:
             return
         left = 0.05
-        width = 0.2
-        spacing = 0.02
-        bottom = 0.01
-        height = 0.16
+        width = 0.22
+        spacing = 0.03
+        bottom = 0.012
+        height = 0.18
         for idx, (fname, title) in enumerate(titles):
             path = base / fname
             if not path.exists():
@@ -425,6 +447,31 @@ class LiveSimulationDashboard:
             ax.set_title(title, fontsize=8, color=THEME_COLORS['text_primary'])
             ax.axis('off')
             self.reference_axes.append(ax)
+
+    def _setup_controls(self) -> None:
+        """Create button controls for improved usability."""
+        btn_w = 0.09
+        btn_h = 0.045
+        spacing = 0.012
+        left = 0.05
+        bottom = 0.005
+
+        def add_button(key: str, label: str, callback):
+            nonlocal left
+            ax = self.fig.add_axes([left, bottom, btn_w, btn_h])
+            button = Button(ax, label, color='#E2E8F0', hovercolor='#CBD5E0')
+            button.on_clicked(callback)
+            self._control_buttons[key] = button
+            left += btn_w + spacing
+
+        add_button('play', 'Pause', self._on_btn_toggle_pause)
+        add_button('reset', 'Reset', self._on_btn_reset)
+        add_button('slower', 'Slower', self._on_btn_slower)
+        add_button('faster', 'Faster', self._on_btn_faster)
+        add_button('snapshot', 'Snapshot', self._on_btn_snapshot)
+        add_button('quit', 'Exit', self._on_btn_exit)
+
+        self._refresh_control_states()
 
     def _set_axes_limits(self):
         """Set layout axes limits based on node extents for immediate visibility."""
@@ -1016,40 +1063,56 @@ class LiveSimulationDashboard:
                 f"{status_icon} A{agent.id} {agent.role.name[:4]} | Room{agent.node} | Cleared:{agent.rooms_cleared} | Z{zone}"
             )
         
-        agent_text = "\n\n".join(agent_lines)
-        self.agent_panel_text.set_text(agent_text)
+        agent_text = "\n".join(agent_lines)
+        if agent_text != self._last_agent_panel_text:
+            self.agent_panel_text.set_text(agent_text)
+            self._last_agent_panel_text = agent_text
     
     def _update_summary(self, current_time: float):
         """Update clean summary statistics display."""
-        cleared, total = self.world.G.get_cleared_count()
-        pct_cleared = (cleared / total * 100) if total > 0 else 0
+        total_rooms = len(self._room_nodes)
+        cleared_rooms = sum(1 for node in self._room_nodes if node.cleared)
+        pct_cleared = (cleared_rooms / total_rooms * 100) if total_rooms > 0 else 0.0
         
-        evacuees_total = sum(len(n.evacuees) for n in self.world.G.nodes.values())
-        evacuees_safe = sum(len(n.evacuees) for n in self.world.G.nodes.values() 
-                           if n.node_type == NodeType.EXIT)
+        evacuees_safe = sum(1 for evac in self._evacuees if evac.get('outside'))
+        total_evacuees = max(self._total_evacuees, len(self._evacuees)) or 0
         
         flow_metrics = self.flow_metrics_history[-1] if self.flow_metrics_history else {}
+        flow_value = flow_metrics.get('total_flow', 0.0) if isinstance(flow_metrics, dict) else 0.0
         
-        active_agents = sum(1 for a in self.world.agents 
-                          if a.status in [Status.NORMAL, Status.SLOWED, Status.PROGRESSING])
-        
-        # Clear, informative statistics
-        clearance_rate = (cleared / (current_time + 0.01)) * 60  # rooms per minute
-        stats = (
-            f"CLEARANCE: {cleared}/{total} rooms ({pct_cleared:.1f}%)  |  "
-            f"RATE: {clearance_rate:.1f} rooms/min  |  "
-            f"EVACUEES SAFE: {evacuees_safe}/{evacuees_total}  |  "
-            f"ACTIVE RESPONDERS: {active_agents}/{len(self.world.agents)}  |  "
-            f"EVACUATION FLOW: {flow_metrics.get('total_flow', 0):.2f} people/sec  |  "
-            f"Playback: {self.speed_multiplier}x"
+        active_agents = sum(
+            1 for agent in self.world.agents
+            if agent.status in [Status.NORMAL, Status.SLOWED, Status.PROGRESSING]
         )
         
-        self.stats_text.set_text(stats)
+        clearance_rate = 0.0
+        if current_time > 1e-3 and cleared_rooms > 0:
+            clearance_rate = (cleared_rooms / current_time) * 60.0
+        
+        stats_lines = [
+            (
+                f"CLEARANCE {cleared_rooms}/{total_rooms} ({pct_cleared:.1f}%)   "
+                f"RESPONDERS {active_agents}/{len(self.world.agents)}   "
+                f"EVAC SAFE {evacuees_safe}/{total_evacuees}"
+            ),
+            (
+                f"RATE {clearance_rate:.1f} rooms/min   "
+                f"FLOW {flow_value:.2f} people/s   "
+                f"Playback {self.speed_multiplier:.2f}x"
+            ),
+        ]
+        stats_text = "\n".join(stats_lines)
+        if stats_text != self._last_stats_text:
+            self.stats_text.set_text(stats_text)
+            self._last_stats_text = stats_text
         
         # Update time display
         minutes = int(current_time // 60)
         seconds = int(current_time % 60)
-        self.time_text.set_text(f"{minutes}:{seconds:02d}")
+        time_label = f"{minutes}:{seconds:02d}"
+        if time_label != self._last_time_text:
+            self.time_text.set_text(time_label)
+            self._last_time_text = time_label
     
     def _get_artists(self):
         """Collect all matplotlib artists for blitting."""
@@ -1072,25 +1135,17 @@ class LiveSimulationDashboard:
             self.paused = not self.paused
             if not self.quiet:
                 print(f"{'Paused' if self.paused else 'Resumed'}")
+            self._refresh_control_states()
         
         elif event.key == 'r':
-            self.current_frame = 0
-            self.world.time = 0.0
-            if not self.quiet:
-                print("Reset to start")
+            self._reset_simulation()
         
         elif event.key == 's':
-            filename = f'evacuation_frame_{self.current_frame:05d}.png'
-            self.fig.savefig(filename, dpi=200, bbox_inches='tight')
-            if not self.quiet:
-                print(f"Saved: {filename}")
+            self._save_snapshot()
         
         elif event.key in ['1', '2', '3', '4', '5']:
             speeds = {'1': 0.25, '2': 0.5, '3': 1.0, '4': 2.0, '5': 5.0}
-            self.speed_multiplier = speeds[event.key]
-            self.speed_text.set_text(f'Speed: {self.speed_multiplier:.2f}x')
-            if not self.quiet:
-                print(f"Speed set to {self.speed_multiplier}x")
+            self._set_speed_multiplier(speeds[event.key])
         
         elif event.key == 'escape':
             if not self.quiet:
@@ -1146,6 +1201,85 @@ class LiveSimulationDashboard:
     def _init_blit_artists(self):
         """Deprecated: retained for compatibility."""
         return []
+
+    # ------------------------------------------------------------------
+    # Button callbacks and helpers (usability controls)
+    # ------------------------------------------------------------------
+
+    def _on_btn_toggle_pause(self, _event=None) -> None:
+        self.paused = not self.paused
+        if not self.quiet:
+            print('Paused' if self.paused else 'Resumed')
+        self._refresh_control_states()
+
+    def _on_btn_reset(self, _event=None) -> None:
+        self._reset_simulation()
+
+    def _on_btn_slower(self, _event=None) -> None:
+        if self._speed_index > 0:
+            self._speed_index -= 1
+            self._set_speed_multiplier(self._speed_levels[self._speed_index])
+
+    def _on_btn_faster(self, _event=None) -> None:
+        if self._speed_index < len(self._speed_levels) - 1:
+            self._speed_index += 1
+            self._set_speed_multiplier(self._speed_levels[self._speed_index])
+
+    def _on_btn_snapshot(self, _event=None) -> None:
+        self._save_snapshot()
+
+    def _on_btn_exit(self, _event=None) -> None:
+        if not self.quiet:
+            print("Exiting simulation...")
+        plt.close(self.fig)
+
+    def _reset_simulation(self) -> None:
+        self.current_frame = 0
+        self.world.time = 0.0
+        for agent in self.world.agents:
+            agent.clear_busy(0.0)
+        if not self.quiet:
+            print("Reset to start")
+        self._refresh_control_states()
+
+    def _save_snapshot(self) -> None:
+        filename = f'evacuation_frame_{self.current_frame:05d}.png'
+        self.fig.savefig(filename, dpi=200, bbox_inches='tight')
+        if not self.quiet:
+            print(f"Saved: {filename}")
+
+    def _set_speed_multiplier(self, multiplier: float) -> None:
+        multiplier = max(0.05, float(multiplier))
+        if multiplier in self._speed_levels:
+            self._speed_index = self._speed_levels.index(multiplier)
+        else:
+            diffs = [abs(multiplier - lvl) for lvl in self._speed_levels]
+            self._speed_index = diffs.index(min(diffs))
+            multiplier = self._speed_levels[self._speed_index]
+        self.speed_multiplier = multiplier
+        self.speed_text.set_text(f'Speed:{multiplier:.2f}x')
+        if not self.quiet:
+            print(f"Speed set to {multiplier}x")
+        self._refresh_control_states()
+
+    def _refresh_control_states(self) -> None:
+        play_label = 'Play' if self.paused else 'Pause'
+        btn_play = self._control_buttons.get('play')
+        if btn_play:
+            btn_play.label.set_text(play_label)
+        self._update_button_enabled('slower', self._speed_index > 0)
+        self._update_button_enabled('faster', self._speed_index < len(self._speed_levels) - 1)
+        self.fig.canvas.draw_idle()
+
+    def _update_button_enabled(self, key: str, enabled: bool) -> None:
+        button = self._control_buttons.get(key)
+        if not button:
+            return
+        facecolor = '#E2E8F0' if enabled else '#F7FAFC'
+        button.ax.set_facecolor(facecolor)
+        button.label.set_alpha(1.0 if enabled else 0.4)
+        button.hovercolor = '#CBD5E0' if enabled else facecolor
+        button.eventson = enabled
 
 
 def create_live_visualization(world: World, fps: int = 20, duration: float = 300.0,
