@@ -1,0 +1,412 @@
+building:
+  type: "transit_atrium"
+  num_floors: 3
+
+nodes:
+  # Ground level
+  - id: 0
+    type: "EXIT"
+    floor: 0
+    x: 0
+    y: 0
+    name: "Main Street Entrance"
+    room_priority: 1
+    sector_id: 0
+    search_time: 1.0
+
+  - id: 1
+    type: "LARGE_CENTRAL_ROOM"
+    floor: 0
+    x: 12
+    y: 0
+    name: "Ticket Hall Atrium"
+    area: 60
+    room_priority: 2
+    sector_id: 0
+    search_time: 9.0
+
+  - id: 2
+    type: "CONNECTED_LARGE_ROOM"
+    floor: 0
+    x: 18
+    y: 6
+    name: "Security Screening"
+    area: 40
+    room_priority: 2
+    sector_id: 1
+    search_time: 8.5
+
+  - id: 3
+    type: "CONNECTED_LARGE_ROOM"
+    floor: 0
+    x: 18
+    y: -6
+    name: "Retail Concourse"
+    area: 42
+    room_priority: 3
+    sector_id: 1
+    search_time: 8.0
+
+  - id: 4
+    type: "CORRIDOR"
+    floor: 0
+    x: 24
+    y: 6
+    name: "North Concourse Connector"
+    area: 24
+    room_priority: 3
+    sector_id: 1
+    search_time: 5.5
+
+  - id: 5
+    type: "CORRIDOR"
+    floor: 0
+    x: 24
+    y: -6
+    name: "South Concourse Connector"
+    area: 24
+    room_priority: 3
+    sector_id: 1
+    search_time: 5.5
+
+  - id: 6
+    type: "EXIT"
+    floor: 0
+    x: 30
+    y: 0
+    name: "East Transit Exit"
+    room_priority: 1
+    sector_id: 1
+    search_time: 1.0
+
+  - id: 7
+    type: "STAIRCASE"
+    floor: 0
+    x: 14
+    y: 8
+    name: "North Atrium Stair"
+    area: 14
+    room_priority: 3
+    sector_id: 0
+    search_time: 4.5
+
+  - id: 8
+    type: "STAIRCASE"
+    floor: 0
+    x: 14
+    y: -8
+    name: "South Atrium Stair"
+    area: 14
+    room_priority: 3
+    sector_id: 0
+    search_time: 4.5
+
+  - id: 15
+    type: "CORRIDOR"
+    floor: -1
+    x: 26
+    y: 0
+    name: "Platform Circulation"
+    area: 28
+    room_priority: 3
+    sector_id: 2
+    search_time: 6.0
+
+  - id: 16
+    type: "CORRIDOR"
+    floor: -1
+    x: 32
+    y: -4
+    name: "Service Tunnel Connector"
+    area: 18
+    room_priority: 4
+    sector_id: 2
+    search_time: 4.5
+
+  - id: 17
+    type: "CHECKPOINT"
+    floor: 0
+    x: 10
+    y: -10
+    name: "Crowd Control Post"
+    area: 10
+    room_priority: 3
+    sector_id: 0
+    search_time: 3.5
+
+  # Mezzanine level
+  - id: 9
+    type: "SMALL_ROOM"
+    floor: 1
+    x: 12
+    y: 10
+    name: "Operations Control"
+    area: 16
+    room_priority: 2
+    sector_id: 3
+    search_time: 6.0
+
+  - id: 10
+    type: "SMALL_ROOM"
+    floor: 1
+    x: 12
+    y: -10
+    name: "Station Manager Office"
+    area: 14
+    room_priority: 3
+    sector_id: 3
+    search_time: 5.5
+
+  - id: 11
+    type: "CORRIDOR"
+    floor: 1
+    x: 20
+    y: 0
+    name: "Mezzanine Skywalk"
+    area: 26
+    room_priority: 3
+    sector_id: 3
+    search_time: 5.5
+
+  # Track level
+  - id: 12
+    type: "CONNECTED_LARGE_ROOM"
+    floor: -1
+    x: 32
+    y: 6
+    name: "Track Tunnel West"
+    area: 34
+    room_priority: 2
+    sector_id: 4
+    hazard: "SMOKE"
+    hazard_severity: 0.5
+    search_time: 9.0
+
+  - id: 13
+    type: "CONNECTED_LARGE_ROOM"
+    floor: -1
+    x: 32
+    y: -6
+    name: "Track Tunnel East"
+    area: 34
+    room_priority: 2
+    sector_id: 4
+    hazard: "FIRE"
+    hazard_severity: 0.45
+    search_time: 9.0
+
+  - id: 14
+    type: "EXIT"
+    floor: -1
+    x: 38
+    y: 0
+    name: "Emergency Platform Egress"
+    room_priority: 1
+    sector_id: 4
+    search_time: 1.0
+
+edges:
+  # Ground level circulation
+  - src: 0
+    dst: 1
+    type: "OPEN_AREA"
+    length: 10.0
+    width: 5.0
+
+  - src: 1
+    dst: 2
+    type: "OPEN_AREA"
+    length: 6.0
+    width: 3.0
+
+  - src: 1
+    dst: 3
+    type: "OPEN_AREA"
+    length: 6.0
+    width: 3.0
+
+  - src: 2
+    dst: 4
+    type: "HALLWAY"
+    length: 5.5
+    width: 2.5
+
+  - src: 3
+    dst: 5
+    type: "HALLWAY"
+    length: 5.5
+    width: 2.5
+
+  - src: 4
+    dst: 6
+    type: "HALLWAY"
+    length: 6.0
+    width: 2.6
+
+  - src: 5
+    dst: 6
+    type: "HALLWAY"
+    length: 6.0
+    width: 2.6
+
+  - src: 1
+    dst: 7
+    type: "OPEN_AREA"
+    length: 5.0
+    width: 2.4
+
+  - src: 1
+    dst: 8
+    type: "OPEN_AREA"
+    length: 5.0
+    width: 2.4
+
+  - src: 3
+    dst: 17
+    type: "OPEN_DOOR"
+    length: 4.0
+    width: 1.6
+
+  # Vertical circulation
+  - src: 7
+    dst: 11
+    type: "STAIRS"
+    length: 5.0
+    width: 1.8
+    is_open: True
+
+  - src: 8
+    dst: 11
+    type: "STAIRS"
+    length: 5.0
+    width: 1.8
+    is_open: True
+
+  - src: 7
+    dst: 12
+    type: "STAIRS"
+    length: 6.0
+    width: 1.6
+    is_open: True
+
+  - src: 8
+    dst: 13
+    type: "STAIRS"
+    length: 6.0
+    width: 1.6
+    is_open: True
+
+  # Mezzanine connections
+  - src: 11
+    dst: 9
+    type: "OPEN_DOOR"
+    length: 4.0
+    width: 1.4
+
+  - src: 11
+    dst: 10
+    type: "OPEN_DOOR"
+    length: 4.0
+    width: 1.4
+
+  # Track level
+  - src: 12
+    dst: 15
+    type: "HALLWAY"
+    length: 5.0
+    width: 2.2
+
+  - src: 13
+    dst: 15
+    type: "HALLWAY"
+    length: 5.0
+    width: 2.2
+
+  - src: 15
+    dst: 14
+    type: "HALLWAY"
+    length: 6.5
+    width: 2.4
+
+  - src: 15
+    dst: 16
+    type: "HALLWAY"
+    length: 4.5
+    width: 2.0
+
+  - src: 16
+    dst: 14
+    type: "HALLWAY"
+    length: 4.0
+    width: 1.8
+
+evacuees:
+  - id: 0
+    age_group: "senior"
+    health: "mobility_disability"
+    node: 2
+  - id: 1
+    age_group: "adult"
+    health: "requiring_assistance"
+    node: 12
+  - id: 2
+    age_group: "adult"
+    health: "healthy"
+    node: 9
+  - id: 3
+    age_group: "young_adult"
+    health: "fit"
+    node: 11
+
+evacuee_groups:
+  - node: 1
+    count: 24
+    age_group: "young_adult"
+    health: "healthy"
+
+  - node: 2
+    count: 18
+    profiles:
+      - age_group: "adult"
+        health: "healthy"
+      - age_group: "adult"
+        health: "requiring_assistance"
+      - age_group: "adult"
+        health: "healthy"
+
+  - node: 3
+    count: 14
+    age_group: "adult"
+    health: "healthy"
+
+  - nodes: [4, 5]
+    count: 12
+    profiles:
+      - age_group: "adult"
+        health: "healthy"
+      - age_group: "young_adult"
+        health: "fit"
+
+  - nodes: [12, 13]
+    count: 10
+    profiles:
+      - age_group: "adult"
+        health: "requiring_assistance"
+      - age_group: "adult"
+        health: "healthy"
+
+  - node: 15
+    count: 6
+    age_group: "adult"
+    health: "healthy"
+
+  - node: 11
+    count: 4
+    age_group: "adult"
+    health: "healthy"
+
+  - nodes: [9, 10]
+    count: 2
+    age_group: "adult"
+    health: "healthy"
+

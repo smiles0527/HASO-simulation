@@ -1,0 +1,79 @@
+title: "Medical Pavilion - Critical Care Sweep"
+summary: |
+  Single-floor medical wing with ICU pods, pediatric suites, and radiology
+  imaging. Responders must prioritize life-support areas, oxygen-fed hazards, and
+  mobility-constrained evacuees while maintaining corridor checkpoints.
+
+agents:
+  - id: 0
+    role: "SCOUT"
+    node: 0
+    sweep_mode: "right"
+    personal_priority: 5
+  - id: 1
+    role: "SECURER"
+    node: 1
+    sweep_mode: "right"
+    personal_priority: 4
+  - id: 2
+    role: "SECURER"
+    node: 1
+    sweep_mode: "left"
+    personal_priority: 4
+  - id: 3
+    role: "CHECKPOINTER"
+    node: 7
+    sweep_mode: "corridor"
+    personal_priority: 3
+  - id: 4
+    role: "EVACUATOR"
+    node: 4
+    sweep_mode: "left"
+    personal_priority: 3
+
+weights:
+  room_priority: 2.2
+  sector_priority: 1.4
+  distance: 0.4
+  hazard_penalty: 2.8
+  visibility_penalty: 1.6
+  unchecked_penalty: 3.5
+
+known_nodes: [0, 1, 7, 9]
+
+simulation:
+  tmax: 1500
+  record_interval: 3.0
+  seed: 58
+
+menu:
+  description: >
+    High-acuity medical scenario featuring oxygen leaks, smoke migration, and
+    patients with mobility constraints. Emphasizes securer coordination and
+    double-teaming evacuees on stretchers.
+  recommended_roles:
+    SCOUT:
+      count: 1
+      node: 0
+      sweep_mode: "right"
+      personal_priority: 5
+    SECURER:
+      count: 2
+      node: 1
+      sweep_mode: "left"
+      personal_priority: 4
+    CHECKPOINTER:
+      count: 1
+      node: 7
+      sweep_mode: "corridor"
+      personal_priority: 3
+    EVACUATOR:
+      count: 1
+      node: 4
+      sweep_mode: "left"
+      personal_priority: 3
+  defaults:
+    duration: 1500
+    fps: 18
+    seed: 58
+

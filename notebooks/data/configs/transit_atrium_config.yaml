@@ -1,0 +1,88 @@
+title: "Transit Atrium - Multi-Level Transit Hub"
+summary: |
+  Multi-level commuter hub with open atrium, mezzanine control rooms, and active
+  track tunnels. Electrical faults and smoke challenge visibility while large
+  commuter crowds require rapid triage and exit management.
+
+agents:
+  - id: 0
+    role: "SCOUT"
+    node: 0
+    sweep_mode: "right"
+    personal_priority: 4
+  - id: 1
+    role: "SCOUT"
+    node: 3
+    sweep_mode: "left"
+    personal_priority: 4
+  - id: 2
+    role: "SECURER"
+    node: 2
+    sweep_mode: "right"
+    personal_priority: 3
+  - id: 3
+    role: "SECURER"
+    node: 15
+    sweep_mode: "corridor"
+    personal_priority: 3
+  - id: 4
+    role: "CHECKPOINTER"
+    node: 17
+    sweep_mode: "corridor"
+    personal_priority: 2
+  - id: 5
+    role: "EVACUATOR"
+    node: 6
+    sweep_mode: "left"
+    personal_priority: 3
+  - id: 6
+    role: "EVACUATOR"
+    node: 11
+    sweep_mode: "right"
+    personal_priority: 3
+
+weights:
+  room_priority: 1.7
+  sector_priority: 1.1
+  distance: 0.6
+  hazard_penalty: 2.1
+  visibility_penalty: 1.4
+  unchecked_penalty: 2.8
+
+known_nodes: [0, 1, 2, 3, 7, 8, 11]
+
+simulation:
+  tmax: 2100
+  record_interval: 5.0
+  seed: 77
+
+menu:
+  description: >
+    Complex transit incident with simultaneous tunnel hazards, mezzanine command
+    coordination, and crowd management across three vertical layers.
+  recommended_roles:
+    SCOUT:
+      count: 2
+      node: 0
+      sweep_mode: "right"
+      personal_priority: 4
+    SECURER:
+      count: 2
+      node: 2
+      sweep_mode: "corridor"
+      personal_priority: 3
+    CHECKPOINTER:
+      count: 1
+      node: 17
+      sweep_mode: "corridor"
+      personal_priority: 2
+    EVACUATOR:
+      count: 2
+      node: 6
+      sweep_mode: "left"
+      personal_priority: 3
+  defaults:
+    duration: 2100
+    fps: 16
+    seed: 77
+
