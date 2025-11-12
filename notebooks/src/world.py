@@ -5,13 +5,18 @@ Manages the simulation state, event scheduling, and fog-of-war system.
 """
 
 from __future__ import annotations
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from dataclasses import dataclass, field
 import heapq
 import math
 
 from .graph_model import Graph, Node, NodeType, HazardType
 from .agents import Agent, Role, Status
+
+try:
+    from .task_allocator import optimize_zone_assignment_ilp
+except ImportError:  # pragma: no cover
+    optimize_zone_assignment_ilp = None
 
 
 @dataclass
@@ -190,6 +195,11 @@ class World:
         
         # Visualization helper: track active agent movements between nodes
         self.movement_tracker: Dict[int, Dict[str, Any]] = {}
+
+        # Evacuee state tracking
+        self.evac_states: Dict[int, Dict[str, Any]] = {}
+        self._total_evacuees: int = 0
+        self._initialize_evacuation_states()
     
     def init_fog(self, known_nodes: List[int]) -> None:
         """Initialize fog of war with known starting nodes."""
@@ -198,6 +208,331 @@ class World:
         # Update fog from all agents' initial positions
         for agent in self.agents:
             self.fog.update_from_agent(agent)
+
+    # ------------------------------------------------------------------
+    # Evacuee initialization & utilities
+    # ------------------------------------------------------------------
+
+    def _initialize_evacuation_states(self) -> None:
+        """Pre-compute evacuee metadata and occupancy probabilities."""
+        self.evac_states.clear()
+        self._total_evacuees = 0
+
+        for node in self.G.nodes.values():
+            evacuees = list(getattr(node, "evacuees", []))
+            self._total_evacuees += len(evacuees)
+            self._update_node_occupancy(node.id)
+
+            for evac in evacuees:
+                evac.evacuating = False
+                evac.outside = False
+                state = {
+                    "evac": evac,
+                    "path": self._compute_exit_path(evac.node),
+                    "index": 0,
+                    "moving": False,
+                    "assisted": not evac.needs_assistance,
+                    "position": (node.x, node.y),
+                    "started": False,
+                    "waiting_for_path": False,
+                    "segment_start_time": None,
+                    "segment_end_time": None,
+                    "start_pos": (node.x, node.y),
+                    "end_pos": (node.x, node.y),
+                    "departing_from": node.id,
+                }
+
+                if not state["path"] or len(state["path"]) <= 1:
+                    state["waiting_for_path"] = True
+
+                self.evac_states[evac.id] = state
+
+    def _compute_exit_path(self, start_id: int) -> Optional[List[int]]:
+        """Find a traversable path from start node to the nearest exit."""
+        exits = list(self.G.exits)
+        if not exits:
+            return None
+
+        if start_id in exits:
+            return [start_id]
+
+        from heapq import heappush, heappop
+
+        open_set: List[Tuple[float, int]] = []
+        heappush(open_set, (0.0, start_id))
+
+        came_from: Dict[int, int] = {}
+        g_score: Dict[int, float] = {start_id: 0.0}
+
+        exit_set = set(exits)
+
+        def heuristic(node_id: int) -> float:
+            return min(self.G.distance(node_id, exit_id) for exit_id in exits)
+
+        while open_set:
+            _, current = heappop(open_set)
+
+            if current in exit_set:
+                return self._reconstruct_path(came_from, current)
+
+            for neighbor in self.G.neighbors(current):
+                edge = self.G.get_edge(current, neighbor)
+                if not edge or not edge.can_traverse():
+                    continue
+
+                hazard_mod = self.get_hazard_modifier(neighbor)
+                travel_time = edge.get_traversal_time(
+                    base_speed=1.2,
+                    hazard_modifier=hazard_mod,
+                )
+
+                if travel_time == float("inf"):
+                    continue
+
+                tentative_g = g_score[current] + travel_time
+
+                if tentative_g < g_score.get(neighbor, float("inf")):
+                    came_from[neighbor] = current
+                    g_score[neighbor] = tentative_g
+                    heappush(open_set, (tentative_g + heuristic(neighbor), neighbor))
+
+        return None
+
+    @staticmethod
+    def _reconstruct_path(came_from: Dict[int, int], current: int) -> List[int]:
+        """Reconstruct path from parent map."""
+        path = [current]
+        while current in came_from:
+            current = came_from[current]
+            path.append(current)
+        path.reverse()
+        return path
+
+    def _update_node_occupancy(self, node_id: int) -> None:
+        """Update occupancy probability based on current evacuees."""
+        node = self.G.get_node(node_id)
+        if not node:
+            return
+        evacuees = getattr(node, "evacuees", [])
+        capacity = max(1.0, node.area / 2.0)
+        node.occupancy_probability = min(1.0, len(evacuees) / capacity)
+
+    def _maybe_start_evacuees(self, node_id: int) -> None:
+        """Check evacuees at a node and start their evacuation if possible."""
+        node = self.G.get_node(node_id)
+        if not node:
+            return
+
+        for evac in list(getattr(node, "evacuees", [])):
+            state = self.evac_states.get(evac.id)
+            if not state or state["started"]:
+                continue
+
+            if evac.needs_assistance and not state.get("assisted", False):
+                continue
+
+            path = self._compute_exit_path(evac.node)
+            if not path or len(path) <= 1:
+                state["waiting_for_path"] = True
+                continue
+
+            state["path"] = path
+            state["waiting_for_path"] = False
+            self._start_evacuation(evac.id)
+
+    def _start_evacuation(self, evac_id: int) -> None:
+        """Kick off evacuee movement along its path."""
+        state = self.evac_states.get(evac_id)
+        if not state or state["started"]:
+            return
+
+        path = state.get("path")
+        if not path or len(path) <= 1:
+            state["waiting_for_path"] = True
+            return
+
+        state["started"] = True
+        state["moving"] = True
+        evac = state["evac"]
+        evac.evacuating = True
+        self._schedule_next_evac_segment(evac_id)
+
+    def _schedule_next_evac_segment(self, evac_id: int) -> None:
+        """Schedule the next leg of evacuee movement."""
+        state = self.evac_states.get(evac_id)
+        if not state:
+            return
+
+        path = state.get("path") or []
+        idx = state.get("index", 0)
+        if idx >= len(path) - 1:
+            self._complete_evac(evac_id)
+            return
+
+        current_node_id = path[idx]
+        next_node_id = path[idx + 1]
+
+        current_node = self.G.get_node(current_node_id)
+        next_node = self.G.get_node(next_node_id)
+        edge = self.G.get_edge(current_node_id, next_node_id) if current_node and next_node else None
+
+        if not current_node or not next_node or not edge or not edge.can_traverse():
+            # Door or path is unavailable – re-evaluate later
+            state["started"] = False
+            state["moving"] = False
+            state["waiting_for_path"] = True
+            if current_node and state["evac"] not in current_node.evacuees:
+                current_node.evacuees.append(state["evac"])
+                self._update_node_occupancy(current_node.id)
+            return
+
+        evac = state["evac"]
+        speed_multiplier = evac.speed_multiplier or 0.3
+        if evac.needs_assistance and not state.get("assisted", False):
+            # Should not happen, but guard
+            speed_multiplier = 0.0
+
+        effective_speed = max(0.4, 1.1 * speed_multiplier)
+        hazard_mod = self.get_hazard_modifier(next_node_id)
+        travel_time = edge.get_traversal_time(base_speed=effective_speed, hazard_modifier=hazard_mod)
+
+        if travel_time == float("inf"):
+            state["started"] = False
+            state["moving"] = False
+            state["waiting_for_path"] = True
+            if current_node and state["evac"] not in current_node.evacuees:
+                current_node.evacuees.append(state["evac"])
+                self._update_node_occupancy(current_node.id)
+            return
+
+        travel_time = max(0.1, float(travel_time))
+
+        if current_node and state["evac"] in current_node.evacuees:
+            current_node.evacuees.remove(state["evac"])
+            self._update_node_occupancy(current_node.id)
+
+        state["moving"] = True
+        state["departing_from"] = current_node_id
+        state["segment_start_time"] = self.time
+        state["segment_end_time"] = self.time + travel_time
+        state["start_pos"] = (current_node.x, current_node.y)
+        state["end_pos"] = (next_node.x, next_node.y)
+
+        self.schedule(travel_time, self._evac_arrive, evac_id, next_node_id)
+
+    def _evac_arrive(self, evac_id: int, next_node_id: int) -> None:
+        """Handle evacuee arrival at the next node."""
+        state = self.evac_states.get(evac_id)
+        if not state:
+            return
+
+        evac = state["evac"]
+        path = state.get("path") or []
+        idx = state.get("index", 0)
+
+        if idx >= len(path) - 1:
+            self._complete_evac(evac_id)
+            return
+
+        current_node_id = path[idx]
+        next_node = self.G.get_node(next_node_id)
+        current_node = self.G.get_node(current_node_id)
+
+        state["index"] = idx + 1
+        state["segment_start_time"] = None
+        state["segment_end_time"] = None
+        state["start_pos"] = (next_node.x, next_node.y) if next_node else state["start_pos"]
+        state["end_pos"] = state["start_pos"]
+        state["position"] = (next_node.x, next_node.y) if next_node else state.get("position", (0.0, 0.0))
+
+        evac.node = next_node_id
+
+        if next_node:
+            if next_node.node_type == NodeType.EXIT:
+                self._complete_evac(evac_id)
+            else:
+                if evac not in next_node.evacuees:
+                    next_node.evacuees.append(evac)
+                self._update_node_occupancy(next_node.id)
+                # Continue to the following segment
+                self._schedule_next_evac_segment(evac_id)
+
+        if current_node:
+            self._update_node_occupancy(current_node.id)
+
+    def _complete_evac(self, evac_id: int) -> None:
+        """Mark evacuee as safely outside."""
+        state = self.evac_states.get(evac_id)
+        if not state:
+            return
+
+        evac = state["evac"]
+        evac.outside = True
+        evac.evacuating = False
+        state["moving"] = False
+        state["segment_start_time"] = None
+        state["segment_end_time"] = None
+        exit_node = self.G.get_node(evac.node)
+        if exit_node:
+            state["position"] = (exit_node.x, exit_node.y)
+            self._update_node_occupancy(exit_node.id)
+
+    def get_evacuee_states(self) -> List[Dict[str, Any]]:
+        """Expose evacuee states for visualization."""
+        states = []
+        for evac_id, state in self.evac_states.items():
+            evac = state["evac"]
+            position = state.get("position", (0.0, 0.0))
+
+            # Interpolate position if in transit
+            start_time = state.get("segment_start_time")
+            end_time = state.get("segment_end_time")
+            if state.get("moving") and start_time is not None and end_time is not None and end_time > start_time:
+                t = (self.time - start_time) / (end_time - start_time)
+                t = max(0.0, min(1.0, t))
+                sx, sy = state.get("start_pos", position)
+                ex, ey = state.get("end_pos", position)
+                position = (sx + (ex - sx) * t, sy + (ey - sy) * t)
+
+            states.append(
+                {
+                    "id": evac_id,
+                    "x": position[0],
+                    "y": position[1],
+                    "outside": evac.outside,
+                    "moving": state.get("moving", False),
+                    "node": evac.node,
+                }
+            )
+        return states
+
+    def get_evacuee_summary(self) -> Dict[str, int]:
+        """Return aggregate evacuee statistics."""
+        safe = sum(1 for state in self.evac_states.values() if state["evac"].outside)
+        moving = sum(1 for state in self.evac_states.values() if state.get("moving", False))
+        return {
+            "total": self._total_evacuees,
+            "safe": safe,
+            "moving": moving,
+        }
+
+    def mark_evacuee_assisted(self, evacuee_id: int) -> None:
+        """Mark that an evacuee has received assistance and can start moving."""
+        state = self.evac_states.get(evacuee_id)
+        if not state:
+            return
+        state["assisted"] = True
+        evac = state["evac"]
+        evac.evacuating = True
+        self._maybe_start_evacuees(evac.node)
+
+    def notify_edge_open(self, src: int, dst: int) -> None:
+        """Notify evac system that connectivity changed between nodes."""
+        self._maybe_start_evacuees(src)
+        self._maybe_start_evacuees(dst)
+
+    # ------------------------------------------------------------------
+
     
     def schedule(self, dt: float, fn: Callable, *args) -> None:
         """
@@ -434,13 +769,19 @@ class World:
         
         return None  # No path found
     
-    def find_nearest_uncleared_room(self, from_node: int, max_candidates: int = 10) -> Optional[int]:
+    def find_nearest_uncleared_room(
+        self,
+        from_node: int,
+        max_candidates: int = 10,
+        allowed_nodes: Optional[Set[int]] = None,
+    ) -> Optional[int]:
         """
         Find nearest uncleared room from a given node.
         
         Args:
             from_node: starting node ID
             max_candidates: maximum number of candidates to consider
+            allowed_nodes: optional set of node IDs to restrict search
         
         Returns:
             Node ID of nearest uncleared room, or None
@@ -450,6 +791,7 @@ class World:
             if not node.cleared
             and node.node_type not in [NodeType.CORRIDOR, NodeType.EXIT, NodeType.CHECKPOINT]
             and self.fog.is_known(nid)
+            and (allowed_nodes is None or nid in allowed_nodes)
         ]
         
         if not uncleared:
@@ -555,7 +897,13 @@ class World:
             if node.hazard == HazardType.FIRE:
                 node.visibility = max(0.1, 1.0 - node.hazard_severity * 0.8)
     
-    def shortest_path_haso(self, start: int, goal: int, beta: float = None, lambda_: float = None) -> Optional[List[int]]:
+    def shortest_path_haso(
+        self,
+        start: int,
+        goal: int,
+        beta: Optional[float] = None,
+        lambda_: Optional[float] = None,
+    ) -> Optional[List[int]]:
         """
         HASO Step 4: A* pathfinding with dynamic hazard and visibility costs.
         
@@ -659,7 +1007,7 @@ class World:
         
         return None  # No path found
     
-    def init_zones(self, num_zones: int = None) -> None:
+    def init_zones(self, num_zones: Optional[int] = None) -> None:
         """
         HASO Step 3: Initialize zone partitioning.
         
@@ -674,8 +1022,19 @@ class World:
         # Partition building into zones
         self.zones = partition_building_zones(self.G, num_zones)
         
-        # Assign agents to zones
-        self.agent_zones = assign_responders_to_zones(self.zones, self.agents, self.G)
+        # Assign agents to zones (prefer ILP optimization when available)
+        assignment: Dict[int, int] = {}
+        if optimize_zone_assignment_ilp is not None:
+            try:
+                assignment = optimize_zone_assignment_ilp(self.zones, self.agents, self.G)
+            except Exception as exc:  # pragma: no cover
+                print(f"[HASO] ILP assignment failed ({exc}); falling back to greedy assignment.")
+                assignment = {}
+
+        if not assignment:
+            assignment = assign_responders_to_zones(self.zones, self.agents, self.G)
+
+        self.agent_zones = assignment
         
         print(f"[HASO] Partitioned building into {len(self.zones)} zones")
         for agent in self.agents:

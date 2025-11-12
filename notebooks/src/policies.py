@@ -6,7 +6,7 @@ behavior policy that determines their actions during the sweep.
 """
 
 from __future__ import annotations
-from typing import TYPE_CHECKING, Optional, List
+from typing import TYPE_CHECKING, Optional, List, Set
 import random
 
 if TYPE_CHECKING:
@@ -15,6 +15,59 @@ if TYPE_CHECKING:
 
 from .agents import Role, Status, Action, SweepMode
 from .graph_model import NodeType, HazardType
+
+
+def _agent_zone_nodes(world: World, agent: Agent) -> Optional[Set[int]]:
+    """Return the set of node IDs assigned to the agent's zone, if any."""
+    zone_id = world.agent_zones.get(agent.id)
+    if zone_id is None:
+        return None
+    zone_nodes = world.zones.get(zone_id)
+    if not zone_nodes:
+        return None
+    return set(zone_nodes)
+
+
+def _zone_has_uncleared(world: World, zone_nodes: Set[int]) -> bool:
+    """Check if the zone still has uncleared rooms."""
+    for nid in zone_nodes:
+        node = world.G.get_node(nid)
+        if not node:
+            continue
+        if node.node_type in [NodeType.CORRIDOR, NodeType.EXIT, NodeType.CHECKPOINT]:
+            continue
+        if not node.cleared:
+            return True
+    return False
+
+
+def _filter_nodes_to_zone(
+    world: World,
+    agent: Agent,
+    node_ids: List[int],
+    include_connectors: bool = True,
+) -> List[int]:
+    """Restrict candidate node IDs to the agent's assigned zone when applicable."""
+    zone_nodes = _agent_zone_nodes(world, agent)
+    if not zone_nodes:
+        return node_ids
+
+    filtered = []
+    for node_id in node_ids:
+        if node_id in zone_nodes:
+            filtered.append(node_id)
+            continue
+        if not include_connectors:
+            continue
+        node = world.G.get_node(node_id)
+        if node and node.node_type in [NodeType.CORRIDOR, NodeType.EXIT, NodeType.CHECKPOINT]:
+            filtered.append(node_id)
+
+    if filtered:
+        return filtered
+
+    # Zone exhausted, allow spillover
+    return node_ids
 
 
 def tick_policy(world: World, agent: Agent) -> None:
@@ -197,6 +250,10 @@ def evacuator_policy(world: World, agent: Agent) -> None:
         return
     agent.set_action(Action.CHECKING)
     
+    zone_nodes = _agent_zone_nodes(world, agent)
+    zone_active = zone_nodes and _zone_has_uncleared(world, zone_nodes)
+    allowed_nodes = zone_nodes if zone_active else None
+
     # Update fog
     world.fog.update_from_agent(agent)
     
@@ -223,7 +280,7 @@ def evacuator_policy(world: World, agent: Agent) -> None:
     else:
         # All rooms checked or no rooms to check yet
         # Move towards uncleared areas to follow the sweep
-        uncleared = world.find_nearest_uncleared_room(agent.node)
+        uncleared = world.find_nearest_uncleared_room(agent.node, allowed_nodes=allowed_nodes)
         if uncleared:
             agent.set_action(Action.MOVING)
             _move_agent_to(world, agent, uncleared)
@@ -239,8 +296,14 @@ def evacuator_policy(world: World, agent: Agent) -> None:
 
 def _find_scout_target(world: World, agent: Agent) -> Optional[int]:
     """Find next target for scout (prioritize unexplored areas)."""
+    zone_nodes = _agent_zone_nodes(world, agent)
+    zone_active = zone_nodes and _zone_has_uncleared(world, zone_nodes)
+    allowed_nodes = zone_nodes if zone_active else None
+
     # Get known but not fully explored nodes
     known_nodes = world.fog.get_known_nodes()
+    known_nodes = _filter_nodes_to_zone(world, agent, known_nodes)
+
     unexplored = [
         nid for nid in known_nodes
         if not world.fog.is_fully_known(nid)
@@ -252,12 +315,13 @@ def _find_scout_target(world: World, agent: Agent) -> Optional[int]:
         return unexplored[0]
     
     # All known nodes explored, find uncleared rooms
-    uncleared = world.find_nearest_uncleared_room(agent.node)
+    uncleared = world.find_nearest_uncleared_room(agent.node, allowed_nodes=allowed_nodes)
     if uncleared:
         return uncleared
     
     # Use sweep mode to explore systematically
     neighbors = world.G.neighbors(agent.node)
+    neighbors = _filter_nodes_to_zone(world, agent, neighbors)
     if agent.sweep_mode == "right":
         ordered = SweepMode.right_hand_order(agent.node, neighbors)
     elif agent.sweep_mode == "left":
@@ -276,6 +340,10 @@ def _find_scout_target(world: World, agent: Agent) -> Optional[int]:
 
 def _find_securer_target(world: World, agent: Agent) -> Optional[int]:
     """Find next target for securer (prioritize signaled rooms and uncleared)."""
+    zone_nodes = _agent_zone_nodes(world, agent)
+    zone_active = zone_nodes and _zone_has_uncleared(world, zone_nodes)
+    allowed_nodes = zone_nodes if zone_active else None
+
     # Check for signals from scouts
     for other in world.agents:
         if other.role == Role.SCOUT and other.signals:
@@ -284,14 +352,20 @@ def _find_securer_target(world: World, agent: Agent) -> Optional[int]:
             if signal_type in ["evacuees", "hazard", "priority"]:
                 node = world.G.get_node(signal_node)
                 if node and not node.cleared:
+                    if allowed_nodes and signal_node not in allowed_nodes:
+                        continue
                     return signal_node
     
     # Find nearest uncleared room
-    return world.find_nearest_uncleared_room(agent.node)
+    return world.find_nearest_uncleared_room(agent.node, allowed_nodes=allowed_nodes)
 
 
 def _find_evacuator_target(world: World, agent: Agent) -> Optional[int]:
     """Find next target for evacuator (cleared but not double-checked rooms)."""
+    zone_nodes = _agent_zone_nodes(world, agent)
+    zone_active = zone_nodes and _zone_has_uncleared(world, zone_nodes)
+    allowed_nodes = zone_nodes if zone_active else None
+
     # Find cleared rooms that haven't been double-checked by this agent
     cleared_rooms = [
         nid for nid, node in world.G.nodes.items()
@@ -300,6 +374,7 @@ def _find_evacuator_target(world: World, agent: Agent) -> Optional[int]:
         and node.node_type not in [NodeType.CORRIDOR, NodeType.EXIT, NodeType.CHECKPOINT]
         and nid not in agent.visited_nodes
     ]
+    cleared_rooms = _filter_nodes_to_zone(world, agent, cleared_rooms, include_connectors=False)
     
     if cleared_rooms:
         # Sort by distance
@@ -414,6 +489,7 @@ def _move_agent_to(world: World, agent: Agent, target: int) -> None:
 def _explore_random(world: World, agent: Agent) -> None:
     """Explore random neighbor when no specific target."""
     neighbors = world.G.neighbors(agent.node)
+    neighbors = _filter_nodes_to_zone(world, agent, neighbors)
     known_neighbors = [n for n in neighbors if world.fog.is_known(n)]
     
     if known_neighbors:
@@ -454,6 +530,7 @@ def _finish_clearing(world: World, agent: Agent, node_id: int) -> None:
     agent.log_action(f"Cleared node {node_id}")
     agent.clear_busy(world.time)
     agent.set_action(Action.MOVING)
+    world._maybe_start_evacuees(node_id)
 
 
 def _finish_checking(world: World, agent: Agent, node_id: int) -> None:
@@ -487,6 +564,7 @@ def _finish_assisting(world: World, agent: Agent, evacuee_id: int) -> None:
     agent.log_action(f"Finished assisting evacuee {evacuee_id}")
     agent.clear_busy(world.time)
     agent.set_action(Action.MOVING)
+    world.mark_evacuee_assisted(evacuee_id)
 
 
 def _complete_edge_preparation(
@@ -506,6 +584,7 @@ def _complete_edge_preparation(
         else:
             edge.break_edge(agent.id, world.time)
             agent.log_action(f"Breached edge to node {dst}")
+        world.notify_edge_open(src, dst)
     agent.clear_busy(world.time)
     _move_agent_to(world, agent, target)
 

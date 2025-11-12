@@ -28,6 +28,7 @@ from matplotlib.patches import Circle, Rectangle, FancyArrowPatch, Wedge, Arrow
 from matplotlib.collections import LineCollection, PatchCollection
 from matplotlib.colors import LinearSegmentedColormap, Normalize
 from matplotlib import colors as mcolors
+from matplotlib.axes import Axes
 from typing import Dict, List, Tuple, Optional, Any
 from pathlib import Path
 import time as pytime
@@ -159,8 +160,9 @@ class LiveSimulationDashboard:
         self.heat_overlay = None
         # Evacuee rendering
         self.evacuee_scatter = None
-        self._evacuees = []  # evacuee state list
-        self._evac_positions = None
+        self._evac_ids: List[int] = []
+        self._evac_positions: Optional[np.ndarray] = None
+        self._evac_colors: Optional[np.ndarray] = None
         self.reference_axes = []
         # Caches to skip redundant drawing work
         self.node_cache: Dict[int, Dict[str, Any]] = {}
@@ -184,14 +186,21 @@ class LiveSimulationDashboard:
         # Update throttling
         self.metrics_interval = 10
         self.flow_update_interval = 10
+
+        # Axis expansion
+        self._expandable_axes: List[Axes] = []
+        self._axis_positions: Dict[Axes, Any] = {}
+        self._expanded_axis: Optional[Axes] = None
         
         # Initialize visualization
         self._setup_figure()
         self._setup_plots()
         self._calculate_layout()
+        self._register_expandable_axes()
         self._init_visualization()
         # Connect keyboard controls for responsiveness
         self.fig.canvas.mpl_connect('key_press_event', self._on_key_press)
+        self.fig.canvas.mpl_connect('button_press_event', self._on_axes_click)
         # Draw static background once before animation for blitting
         self.fig.canvas.draw()
         # Ensure all agents have an initial tick scheduled so movement begins immediately
@@ -370,6 +379,12 @@ class LiveSimulationDashboard:
         self._load_reference_images()
         self._setup_controls()
     
+    def _register_expandable_axes(self) -> None:
+        """Record default axis positions for expansion toggling."""
+        self._expandable_axes = [self.ax_layout, self.ax_progress, self.ax_agents]
+        self._axis_positions = {ax: ax.get_position().frozen() for ax in self._expandable_axes}
+        self._expanded_axis = None
+    
     def _calculate_layout(self):
         """Use actual building coordinates from YAML for realistic layout."""
         # Nodes already have x,y from building YAML - just verify they're loaded
@@ -424,11 +439,11 @@ class LiveSimulationDashboard:
                 break
         if base is None:
             return
-        left = 0.05
-        width = 0.22
-        spacing = 0.03
-        bottom = 0.012
-        height = 0.18
+        left = 0.045
+        width = 0.225
+        spacing = 0.02
+        bottom = 0.02
+        height = 0.26
         for idx, (fname, title) in enumerate(titles):
             path = base / fname
             if not path.exists():
@@ -445,6 +460,10 @@ class LiveSimulationDashboard:
             ])
             ax.imshow(img)
             ax.set_title(title, fontsize=8, color=THEME_COLORS['text_primary'])
+            ax.set_facecolor(THEME_COLORS['panel_bg'])
+            for spine in ax.spines.values():
+                spine.set_edgecolor(THEME_COLORS['border'])
+                spine.set_linewidth(1.5)
             ax.axis('off')
             self.reference_axes.append(ax)
 
@@ -705,6 +724,45 @@ class LiveSimulationDashboard:
         legend2.get_frame().set_linewidth(1.5)
         legend2.get_title().set_fontweight('bold')
     
+    def _expand_axis(self, axis: Axes) -> None:
+        """Expand a single axis to fill the canvas."""
+        if self._expanded_axis is axis:
+            return
+        for other in self._expandable_axes:
+            if other is axis:
+                continue
+            other.set_visible(False)
+        axis.set_visible(True)
+        axis.set_position([0.08, 0.12, 0.86, 0.78])
+        self._expanded_axis = axis
+        self.fig.canvas.draw_idle()
+
+    def _restore_axes(self) -> None:
+        """Restore all axes to their original layout."""
+        if self._expanded_axis is None:
+            return
+        for axis in self._expandable_axes:
+            pos = self._axis_positions.get(axis)
+            if pos is not None:
+                axis.set_position(pos)
+            axis.set_visible(True)
+        self._expanded_axis = None
+        self.fig.canvas.draw_idle()
+
+    def _on_axes_click(self, event) -> None:
+        """Toggle axis expansion when clicking on a panel."""
+        if event.button != 1:
+            return
+        axis = event.inaxes
+        if axis is None or axis not in self._expandable_axes:
+            if self._expanded_axis is not None:
+                self._restore_axes()
+            return
+        if self._expanded_axis is axis:
+            self._restore_axes()
+        else:
+            self._expand_axis(axis)
+    
     def _interpolate_agent_position(self, agent: Agent) -> Tuple[float, float]:
         """
         Calculate smooth agent position using world movement tracker.
@@ -749,153 +807,72 @@ class LiveSimulationDashboard:
         agent_state['last_node'] = agent.node
         return (current_node.x, current_node.y)
     
-    def _nearest_exit(self, start: int) -> Optional[int]:
-        exits = self.world.G.exits
-        if not exits:
-            return None
-        # Pick closest by Euclidean distance
-        return min(exits, key=lambda e: self.world.G.distance(start, e))
-
-    def _path_any(self, start: int, goal: int) -> Optional[List[int]]:
-        """Fast A* path ignoring fog; respects traversable/open edges."""
-        if start == goal:
-            return [start]
-        from heapq import heappush, heappop
-        G = self.world.G
-        open_set = []
-        heappush(open_set, (0.0, start))
-        came_from = {}
-        g_score = {start: 0.0}
-        f_score = {start: G.distance(start, goal)}
-        while open_set:
-            _, current = heappop(open_set)
-            if current == goal:
-                path = [current]
-                while current in came_from:
-                    current = came_from[current]
-                    path.append(current)
-                return list(reversed(path))
-            for neighbor in G.neighbors(current):
-                edge = G.get_edge(current, neighbor)
-                if not edge or not edge.traversable or not edge.is_open:
-                    continue
-                # Use evac base speed 1.2 m/s for timing heuristic
-                cost = edge.get_traversal_time(base_speed=1.2, hazard_modifier=self.world.get_hazard_modifier(neighbor))
-                tentative = g_score[current] + cost
-                if neighbor not in g_score or tentative < g_score[neighbor]:
-                    came_from[neighbor] = current
-                    g_score[neighbor] = tentative
-                    f_score[neighbor] = tentative + G.distance(neighbor, goal)
-                    heappush(open_set, (f_score[neighbor], neighbor))
-        return None
-
     def _init_evacuees(self):
-        """Create evacuee scatter and movement state."""
-        positions = []
-        colors = []
-        for node in self.world.G.nodes.values():
-            if not node.evacuees:
-                continue
-            for evac in node.evacuees:
-                # Start moving by default so we always see motion
-                needs_help = getattr(evac, 'needs_assistance', False)
-                start_moving = True
-                # Minimum visible speed; boosted when assisted
-                speed = max(0.3, 1.0 * getattr(evac, 'speed_multiplier', 1.0))
-                # Compute path to nearest exit
-                goal = self._nearest_exit(evac.node)
-                path = self._path_any(evac.node, goal) if goal is not None else [evac.node]
-                state = {
-                    'id': evac.id,
-                    'node': evac.node,
-                    'outside': getattr(evac, 'outside', False),
-                    'moving': bool(start_moving),
-                    'needs_help': bool(needs_help),
-                    'speed': max(0.1, speed),
-                    'path': path or [evac.node],  # list of node ids
-                    'seg_idx': 0,                # index of current segment start in path
-                    'seg_progress': 1.0,         # force initialize first segment
-                    'x': node.x,
-                    'y': node.y,
-                }
-                positions.append([node.x, node.y])
-                # Color: moving evacuees = dark blue, waiting = gray
-                colors.append('#2563EB' if state['moving'] else '#9CA3AF')
-                self._evacuees.append(state)
-        if positions:
-            self._evac_positions = np.array(positions)
-            self.evacuee_scatter = self.ax_layout.scatter(
-                self._evac_positions[:, 0], self._evac_positions[:, 1],
-                s=20, c=np.array(colors), marker='o', linewidths=0, alpha=0.9, zorder=9, animated=True
-            )
+        """Initialize evacuee scatter based on world state."""
+        states = self.world.get_evacuee_states()
+        self._evac_ids = [s["id"] for s in states]
+
+        if not states:
+            self._evac_positions = None
+            self._evac_colors = None
+            if self.evacuee_scatter is not None:
+                self.evacuee_scatter.remove()
+            self.evacuee_scatter = None
+            return
+
+        positions = np.array([[s["x"], s["y"]] for s in states], dtype=float)
+        colors = np.array([self._color_for_evac_state(s) for s in states])
+
+        self._evac_positions = positions
+        self._evac_colors = colors
+
+        self.evacuee_scatter = self.ax_layout.scatter(
+            positions[:, 0],
+            positions[:, 1],
+            s=20,
+            c=colors,
+            marker='o',
+            linewidths=0,
+            alpha=0.9,
+            zorder=9,
+            animated=True,
+        )
+
+    def _color_for_evac_state(self, state: Dict[str, Any]) -> str:
+        """Determine color for evacuee based on movement state."""
+        if state.get("outside"):
+            return THEME_COLORS['success']
+        return '#2563EB' if state.get("moving") else '#9CA3AF'
 
     def _update_evacuees(self, current_time: float) -> None:
-        """Advance evacuees along paths; start evac when assisted."""
-        if not self._evacuees:
+        """Update evacuee scatter positions from world state."""
+        states = self.world.get_evacuee_states()
+
+        if not states:
+            if self.evacuee_scatter is not None:
+                self.evacuee_scatter.set_offsets(np.empty((0, 2)))
+            self._evac_positions = None
+            self._evac_colors = None
+            self._evac_ids = []
             return
-        agents_by_node = {}
-        for a in self.world.agents:
-            agents_by_node.setdefault(a.node, []).append(a)
-        if self._evac_positions is None or len(self._evac_positions) != len(self._evacuees):
-            self._evac_positions = np.zeros((len(self._evacuees), 2))
-        for e in self._evacuees:
-            if e['outside']:
-                self._evac_positions[e['id'], 0] = e['x']
-                self._evac_positions[e['id'], 1] = e['y']
-                continue
-            if not e['moving'] and e['needs_help']:
-                for a in agents_by_node.get(e['node'], []):
-                    if a.role in (Role.SECURER, Role.EVACUATOR):
-                        e['moving'] = True
-                        e['speed'] = max(e['speed'], 1.0)
-                        break
-            path = e['path']
-            if not path or len(path) <= 1:
-                self._evac_positions[e['id'], 0] = e['x']
-                self._evac_positions[e['id'], 1] = e['y']
-                continue
-            if e['seg_progress'] >= 1.0 or 'start_node' not in e or 'target_node' not in e:
-                if e['seg_idx'] >= len(path) - 1:
-                    last_node = self.world.G.get_node(path[-1])
-                    e['x'] = last_node.x if last_node else e['x']
-                    e['y'] = last_node.y if last_node else e['y']
-                    e['outside'] = True
-                    self._evac_positions[e['id'], 0] = e['x']
-                    self._evac_positions[e['id'], 1] = e['y']
-                    continue
-                start_id = path[e['seg_idx']]
-                target_id = path[e['seg_idx'] + 1]
-                e['start_node'] = start_id
-                e['target_node'] = target_id
-                e['seg_progress'] = 0.0
-                s_node = self.world.G.get_node(start_id)
-                if s_node:
-                    e['x'], e['y'] = s_node.x, s_node.y
-            if e['moving']:
-                src = self.world.G.get_node(e['start_node'])
-                dst = self.world.G.get_node(e['target_node'])
-                if src and dst:
-                    edge = self.world.G.get_edge(src.id, dst.id)
-                    hazard_mod = self.world.get_hazard_modifier(dst.id)
-                    seg_time = edge.get_traversal_time(base_speed=e['speed'], hazard_modifier=hazard_mod) if edge else 1.0
-                    seg_time = max(0.05, float(seg_time))
-                    prog_inc = (self.dt * self.speed_multiplier) / seg_time
-                    e['seg_progress'] = min(1.0, e['seg_progress'] + prog_inc)
-                    e['x'] = src.x + (dst.x - src.x) * e['seg_progress']
-                    e['y'] = src.y + (dst.y - src.y) * e['seg_progress']
-                    if e['seg_progress'] >= 1.0:
-                        e['seg_idx'] += 1
-                        if e['seg_idx'] >= len(path) - 1:
-                            if dst.node_type == NodeType.EXIT:
-                                e['outside'] = True
-                self._evac_positions[e['id'], 0] = e['x']
-                self._evac_positions[e['id'], 1] = e['y']
-            else:
-                pass
-                self._evac_positions[e['id'], 0] = e['x']
-                self._evac_positions[e['id'], 1] = e['y']
-        if self.evacuee_scatter is not None and self._evac_positions is not None and self._evac_positions.size:
+
+        if self.evacuee_scatter is None or len(states) != len(self._evac_ids):
+            self._init_evacuees()
+            return
+
+        if self._evac_positions is None or self._evac_positions.shape[0] != len(states):
+            self._evac_positions = np.zeros((len(states), 2))
+        if self._evac_colors is None or len(self._evac_colors) != len(states):
+            self._evac_colors = np.empty(len(states), dtype=object)
+
+        for idx, state in enumerate(states):
+            self._evac_positions[idx, 0] = state["x"]
+            self._evac_positions[idx, 1] = state["y"]
+            self._evac_colors[idx] = self._color_for_evac_state(state)
+
+        if self.evacuee_scatter is not None:
             self.evacuee_scatter.set_offsets(self._evac_positions)
+            self.evacuee_scatter.set_color(self._evac_colors.tolist())
     
     def _update_frame(self, frame: int):
         """
@@ -1074,9 +1051,11 @@ class LiveSimulationDashboard:
         cleared_rooms = sum(1 for node in self._room_nodes if node.cleared)
         pct_cleared = (cleared_rooms / total_rooms * 100) if total_rooms > 0 else 0.0
         
-        evacuees_safe = sum(1 for evac in self._evacuees if evac.get('outside'))
-        total_evacuees = max(self._total_evacuees, len(self._evacuees)) or 0
-        
+        evac_summary = self.world.get_evacuee_summary()
+        evacuees_safe = evac_summary.get("safe", 0)
+        total_evacuees = evac_summary.get("total", 0)
+        evac_moving = evac_summary.get("moving", 0)
+
         flow_metrics = self.flow_metrics_history[-1] if self.flow_metrics_history else {}
         flow_value = flow_metrics.get('total_flow', 0.0) if isinstance(flow_metrics, dict) else 0.0
         
@@ -1093,7 +1072,7 @@ class LiveSimulationDashboard:
             (
                 f"CLEARANCE {cleared_rooms}/{total_rooms} ({pct_cleared:.1f}%)   "
                 f"RESPONDERS {active_agents}/{len(self.world.agents)}   "
-                f"EVAC SAFE {evacuees_safe}/{total_evacuees}"
+                f"EVAC SAFE {evacuees_safe}/{total_evacuees}   MOVING {evac_moving}"
             ),
             (
                 f"RATE {clearance_rate:.1f} rooms/min   "
