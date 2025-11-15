@@ -11,7 +11,7 @@ print("="*70 + "\n")
 
 print("Loading simulation framework...")
 from notebooks import simulate
-from notebooks.src import (
+from haso_sim import (
     plot_building_layout,
     plot_clearance_progress,
     plot_agent_paths,

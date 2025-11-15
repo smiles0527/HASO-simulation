@@ -19,7 +19,7 @@ import os
 
 print("Loading HASO framework...")
 from notebooks import simulate
-from notebooks.src import (
+from haso_sim import (
     generate_summary_report,
     analyze_simulation_results,
     Graph,
@@ -414,7 +414,7 @@ create_zone_visualization(world)
 
 # 3. Comprehensive dashboard
 print("[3/3] Creating full dashboard...")
-from notebooks.src import create_summary_dashboard
+from haso_sim import create_summary_dashboard
 create_summary_dashboard(world, save_path='demo_results/haso_complete.png')
 
 print()

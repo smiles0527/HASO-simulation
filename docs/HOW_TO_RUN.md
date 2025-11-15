@@ -5,7 +5,7 @@
 ## Method 0: Scenario Launcher (interactive menu)
 
 ```bash
-python launch_simulation.py
+python scripts/launch_simulation.py
 ```
 
 This opens a start-menu style interface where you can pick a curated scenario,
@@ -50,7 +50,7 @@ This will:
 ## Method 3: Visual Demo (with plots)
 
 ```bash
-python demo_visual.py
+python scripts/demo_visual.py
 ```
 
 This will:
@@ -103,8 +103,8 @@ You'll see:
 Create a file called `my_simulation.py`:
 
 ```python
-from notebooks import simulate
-from notebooks.src import generate_summary_report
+from haso_sim import simulate
+from haso_sim import generate_summary_report
 
 # Run simulation
 results = simulate(
@@ -139,7 +139,7 @@ python
 
 Then type:
 ```python
->>> from notebooks import simulate
+>>> from haso_sim import simulate
 >>> results = simulate("notebooks/data/office_building_simple.yaml", tmax=300)
 >>> world = results['world']
 >>> print(f"Time: {world.time:.1f}s")
@@ -152,7 +152,7 @@ Then type:
 ## Recommended Path for Beginners
 
 1. **First time?** Run: `python test_simulation.py`
-2. **Want visuals?** Run: `python demo_visual.py`
+2. **Want visuals?** Run: `python scripts/demo_visual.py`
 3. **Want to explore?** Run: `jupyter lab` → open `simulation_demo.ipynb`
 4. **Ready to experiment?** Create your own maps and run simulations!
 

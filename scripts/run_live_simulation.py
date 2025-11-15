@@ -60,8 +60,8 @@ print("=" * 80 + "\n")
 # Load simulation framework
 try:
     print("Loading simulation framework...")
-    from notebooks import build_world
-    from notebooks.src.animate_live import create_live_visualization
+    from haso_sim import build_world
+    from haso_sim.animate_live import create_live_visualization
     print("[OK] Framework loaded successfully\n")
 except ImportError as e:
     print(f"[ERROR] Error loading framework: {e}")

@@ -14,7 +14,7 @@ pip install -r requirements.txt
 
 ```python
 # In Python or Jupyter
-from notebooks import simulate
+from haso_sim import simulate
 
 results = simulate(
     map_path="notebooks/data/office_building_simple.yaml",
@@ -30,7 +30,7 @@ print(f"All rooms cleared: {results['all_cleared']}")
 ### 3. Visualize Results
 
 ```python
-from notebooks.src import create_summary_dashboard
+from haso_sim import create_summary_dashboard
 
 create_summary_dashboard(results['world'])
 ```
@@ -84,8 +84,8 @@ weights:
 ### Load and Validate a Map
 
 ```python
-from notebooks import load_map
-from notebooks.src import validate_map, create_building_summary
+from haso_sim import load_map
+from haso_sim import validate_map, create_building_summary
 
 G = load_map("notebooks/data/office_building_simple.yaml")
 
@@ -104,7 +104,7 @@ print(f"Evacuees: {summary['total_evacuees']}")
 ### Visualize Building Layout
 
 ```python
-from notebooks.src import plot_building_layout
+from haso_sim import plot_building_layout
 import matplotlib.pyplot as plt
 
 fig, ax = plt.subplots(figsize=(12, 10))
@@ -115,8 +115,8 @@ plt.show()
 ### Run Simulation and Get Report
 
 ```python
-from notebooks import simulate
-from notebooks.src import generate_summary_report
+from haso_sim import simulate
+from haso_sim import generate_summary_report
 
 results = simulate(
     map_path="notebooks/data/office_building_simple.yaml",
@@ -131,7 +131,7 @@ print(report)
 ### Analyze Agent Performance
 
 ```python
-from notebooks.src import analyze_agent_performance
+from haso_sim import analyze_agent_performance
 
 world = results['world']
 for agent in world.agents:
@@ -266,7 +266,7 @@ matplotlib.use('Agg')  # Use non-interactive backend
 ### Main Functions
 
 ```python
-from notebooks import load_map, build_world, simulate
+from haso_sim import load_map, build_world, simulate
 
 # Load map
 G = load_map(path)
@@ -281,7 +281,7 @@ results = simulate(map_path, config_path, tmax=600, seed=42, animate=False)
 ### Visualization Functions
 
 ```python
-from notebooks.src import (
+from haso_sim import (
     plot_building_layout,
     plot_fog_of_war,
     plot_clearance_progress,
@@ -294,7 +294,7 @@ from notebooks.src import (
 ### Analysis Functions
 
 ```python
-from notebooks.src import (
+from haso_sim import (
     analyze_simulation_results,
     analyze_agent_performance,
     generate_summary_report,

@@ -1,6 +1,3 @@
-"""Compatibility shim for legacy imports."""
-
-from haso_sim.animate_live import *  # noqa: F401,F403
 """
 Real-Time Evacuation Simulation Dashboard
 

@@ -21,8 +21,8 @@ from typing import Any, Dict, List, Tuple
 import yaml
 
 from notebooks import build_world, simulate
-from notebooks.src.animate_live import create_live_visualization
-from notebooks.src.utils import generate_summary_report
+from haso_sim.animate_live import create_live_visualization
+from haso_sim.utils import generate_summary_report
 
 
 BASE_DIR = Path(__file__).parent
