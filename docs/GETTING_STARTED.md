@@ -1,19 +1,18 @@
-# NOTE: THIS FILE IS AI GENERATED
+# Getting Started with HASO Emergency Evacuation Simulator
 
-# Getting Started with Emergency Evacuation Sweep Simulator
+This guide provides a concise introduction to running your first simulations, understanding key concepts, and customizing the simulator for your research needs.
 
-## Quick Setup (5 minutes)
+## Quick Setup
 
-### 1. Install Dependencies
+Install dependencies using pip:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Run Your First Simulation
+Run your first simulation programmatically:
 
 ```python
-# In Python or Jupyter
 from haso_sim import simulate
 
 results = simulate(
@@ -27,7 +26,7 @@ print(f"Simulation completed in {results['world'].time:.1f} seconds")
 print(f"All rooms cleared: {results['all_cleared']}")
 ```
 
-### 3. Visualize Results
+Visualize results using the summary dashboard:
 
 ```python
 from haso_sim import create_summary_dashboard
@@ -37,71 +36,73 @@ create_summary_dashboard(results['world'])
 
 ## Key Concepts
 
-### Building Maps (YAML)
+### Building Maps
 
-Buildings are defined as graphs:
-- **Nodes**: Rooms, corridors, exits
-- **Edges**: Doors, hallways with distance/time weights
-- **Properties**: Hazards, evacuees, priorities
+Buildings are defined as weighted graphs encoded in YAML format. Nodes represent rooms, corridors, and exits, while edges capture doors, hallways, and traversal costs. Each node can include properties such as hazards, evacuees, and priority levels.
 
-Example node:
+Example node definition:
+
 ```yaml
 - id: 1
   type: "SMALL_ROOM"
   x: 10
   y: 5
   name: "Office 101"
-  room_priority: 3  # 1 = highest, 5 = lowest
+  room_priority: 3
   hazard: "SMOKE"
-  hazard_severity: 0.5  # 0.0 to 1.0
+  hazard_severity: 0.5
 ```
 
-### Responder Types
+The room_priority field ranges from 1 (highest) to 5 (lowest), while hazard_severity ranges from 0.0 to 1.0.
 
-1. **Scout** - Fast explorer, tags evacuees, signals priorities
-2. **Securer** - Secures hazards, assists evacuees, clears rooms
-3. **Checkpointer** - Guards checkpoints, provides assistance
-4. **Evacuator** - Double-checks clearance, final verification
+### Responder Roles
+
+The simulator supports four cooperative responder roles. Scouts serve as fast explorers that tag evacuees and signal priorities. Securers handle hazard mitigation, assist evacuees, and clear rooms. Checkpointers guard strategic locations and provide assistance. Evacuators perform final verification and double-check clearance status.
 
 ### Configuration
+
+Agent configurations specify starting positions, roles, sweep modes, and personal priorities:
 
 ```yaml
 agents:
   - id: 0
     role: "SCOUT"
-    node: 0              # Starting position
-    sweep_mode: "right"  # "right", "left", or "corridor"
+    node: 0
+    sweep_mode: "right"
     personal_priority: 4
 
 weights:
-  room_priority: 1.5     # Weight for room priority scores
-  distance: 0.5          # Weight for distance penalties
-  hazard_penalty: 2.0    # Penalty for hazardous areas
+  room_priority: 1.5
+  distance: 0.5
+  hazard_penalty: 2.0
 ```
+
+Sweep modes include "right", "left", and "corridor" strategies. Weight parameters control decision-making priorities, with higher values emphasizing critical rooms, distance penalties, or hazard avoidance.
 
 ## Common Tasks
 
 ### Load and Validate a Map
 
+Use load_map to parse YAML building definitions and validate_map to check for connectivity issues:
+
 ```python
-from haso_sim import load_map
-from haso_sim import validate_map, create_building_summary
+from haso_sim import load_map, validate_map, create_building_summary
 
 G = load_map("notebooks/data/office_building_simple.yaml")
 
-# Validate
 issues = validate_map(G)
 if issues:
     for issue in issues:
         print(issue)
 
-# Summary
 summary = create_building_summary(G)
 print(f"Nodes: {summary['total_nodes']}")
 print(f"Evacuees: {summary['total_evacuees']}")
 ```
 
 ### Visualize Building Layout
+
+Generate static layout visualizations using plot_building_layout:
 
 ```python
 from haso_sim import plot_building_layout
@@ -112,11 +113,12 @@ plot_building_layout(G, ax=ax, show_labels=True)
 plt.show()
 ```
 
-### Run Simulation and Get Report
+### Run Simulation and Generate Report
+
+Execute simulations and extract summary reports:
 
 ```python
-from haso_sim import simulate
-from haso_sim import generate_summary_report
+from haso_sim import simulate, generate_summary_report
 
 results = simulate(
     map_path="notebooks/data/office_building_simple.yaml",
@@ -129,6 +131,8 @@ print(report)
 ```
 
 ### Analyze Agent Performance
+
+Inspect individual agent metrics including rooms cleared and distance traveled:
 
 ```python
 from haso_sim import analyze_agent_performance
@@ -143,12 +147,13 @@ for agent in world.agents:
 
 ### Compare Different Strategies
 
+Run comparative studies across sweep strategies:
+
 ```python
 strategies = ['right', 'left', 'corridor']
 results_dict = {}
 
 for strategy in strategies:
-    # Run simulation (modify config for each strategy)
     res = simulate(
         map_path="notebooks/data/office_building_simple.yaml",
         config_path="notebooks/data/config_baseline.yaml",
@@ -160,106 +165,70 @@ for strategy in strategies:
         'cleared': res['world'].G.get_cleared_count()[0]
     }
 
-# Print comparison
 for strategy, metrics in results_dict.items():
     print(f"{strategy}: {metrics['time']:.1f}s, {metrics['cleared']} rooms")
 ```
 
-## Example Buildings Provided
+## Example Buildings
 
-1. **office_building_simple.yaml**
-   - Single floor office
-   - 11 nodes, 7 rooms
-   - 7 evacuees
-   - 1 hazard area
-   - Good for quick testing
+The simulator includes several pre-configured building layouts. The office_building_simple.yaml file provides an entry-level scenario with 11 nodes, 7 rooms, 7 evacuees, and a single hazard area, ideal for quick testing and validation.
 
-2. **hospital_wing.yaml**
-   - Hospital wing with patient rooms
-   - 15 nodes, 9 patient rooms
-   - 13 evacuees (many need assistance)
-   - 1 hazard area
-   - More complex scenario
+The hospital_wing.yaml file presents a more complex scenario with 15 nodes, 9 patient rooms, 13 evacuees (many requiring assistance), and a hazard area, suitable for stress-testing evacuation protocols.
 
 ## Interactive Notebook
 
-Open `notebooks/simulation_demo.ipynb` in Jupyter Lab for:
-- Step-by-step walkthrough
-- Building visualization
-- Simulation execution
-- Results analysis
-- Comparative studies
+The notebooks/simulation_demo.ipynb notebook provides a step-by-step walkthrough covering map inspection, fog-of-war visualization, sweep comparisons, and automated report generation. Launch Jupyter Lab and open the notebook:
 
 ```bash
 jupyter lab
-# Then open notebooks/simulation_demo.ipynb
 ```
+
+The notebook demonstrates building visualization, simulation execution, results analysis, and comparative studies using the create_summary_dashboard, generate_summary_report, and analyze_agent_performance functions.
 
 ## Customization
 
 ### Create Your Own Building
 
-1. Copy an example YAML file
-2. Modify nodes and edges
-3. Add evacuees and hazards
-4. Validate with `validate_map()`
-5. Run simulation
+To define a custom building, copy an example YAML file and modify nodes and edges. Add evacuees and hazards as needed, then validate using validate_map before running simulations. Ensure all rooms connect to at least one exit to prevent simulation stalls.
 
 ### Modify Agent Behavior
 
-Edit `notebooks/src/policies.py` to change:
-- Decision-making logic
-- Priority calculations
-- Movement strategies
-- Task allocation
+Edit haso_sim/policies.py to customize decision-making logic, priority calculations, movement strategies, and task allocation. The policy system integrates with the discrete-event scheduler to coordinate multi-agent operations.
 
 ### Adjust Simulation Parameters
 
-In configuration YAML:
+Configure simulation duration, recording intervals, and random seeds in the configuration YAML:
+
 ```yaml
 simulation:
-  tmax: 900              # Max simulation time (seconds)
-  record_interval: 3.0   # Recording frequency (seconds)
-  seed: 42               # Random seed for reproducibility
+  tmax: 900
+  record_interval: 3.0
+  seed: 42
 ```
+
+The tmax parameter sets maximum simulation time in seconds, while record_interval controls how frequently state snapshots are captured for visualization and analysis.
 
 ## Troubleshooting
 
-### Import Errors
+Import errors typically indicate that the repository root is not on PYTHONPATH. Run scripts from the project root directory or add the root to your Python path:
 
 ```python
 import sys
-sys.path.append('..')  # Add parent directory to path
+sys.path.append('..')
 ```
 
-### Missing Dependencies
+Missing dependency errors can be resolved by upgrading packages:
 
 ```bash
 pip install --upgrade -r requirements.txt
 ```
 
-### Visualization Issues
+For headless visualization sessions, configure matplotlib to use a non-interactive backend:
 
 ```python
 import matplotlib
-matplotlib.use('Agg')  # Use non-interactive backend
+matplotlib.use('Agg')
 ```
-
-## Next Steps
-
-1. Run the demo notebook
-2. Try different building layouts
-3. Experiment with agent configurations
-4. Compare sweep strategies
-5. Analyze optimization opportunities
-6. Extend with custom features
-
-## Need Help?
-
-- Check `README.md` for full documentation
-- Review `notebooks/simulation_demo.ipynb` for examples
-- Examine example YAML files in `notebooks/data/`
-- Read inline documentation in source files
 
 ## API Quick Reference
 
@@ -268,13 +237,8 @@ matplotlib.use('Agg')  # Use non-interactive backend
 ```python
 from haso_sim import load_map, build_world, simulate
 
-# Load map
 G = load_map(path)
-
-# Build world with agents
 world = build_world(map_path, config_path, seed=42)
-
-# Run complete simulation
 results = simulate(map_path, config_path, tmax=600, seed=42, animate=False)
 ```
 
@@ -303,5 +267,6 @@ from haso_sim import (
 )
 ```
 
-Happy simulating! 🚨🏢👥
+## Next Steps
 
+After completing the quickstart, explore different building layouts, experiment with agent configurations, compare sweep strategies, analyze optimization opportunities, and extend the simulator with custom features. Refer to the main README.md for comprehensive documentation, review notebooks/simulation_demo.ipynb for examples, examine YAML files in notebooks/data/ for configuration patterns, and consult inline documentation in source files for implementation details.

@@ -1,143 +1,102 @@
-# NOTE: THIS FILE IS AI GENERATED
+# How to Run the Simulation
 
-# How to Run the Simulation - Step by Step
+This document provides step-by-step instructions for executing simulations using various methods, from quick tests to interactive dashboards and custom scripts.
 
-## Method 0: Scenario Launcher (interactive menu)
+## Scenario Launcher
+
+The interactive scenario launcher provides the fastest way to explore curated scenarios:
 
 ```bash
 python scripts/launch_simulation.py
 ```
 
-This opens a start-menu style interface where you can pick a curated scenario,
-tweak responder counts, scale hazards or evacuee density, and choose between a
-live dashboard or a headless run with automatic reporting. It is the fastest
-way to explore the new Innovation Hub, Medical Pavilion, and Transit Atrium
-layouts.
+This opens a start-menu interface where you can select scenarios, adjust responder counts, scale hazards or evacuee density, and choose between a live dashboard or headless run with automatic reporting. The launcher supports the Innovation Hub, Medical Pavilion, and Transit Atrium layouts.
 
----
+## Quick Test
 
-## Method 1: Quick Test (30 seconds)
-
-**Open your terminal in this folder and run:**
+For a rapid validation of the installation, run the test script:
 
 ```bash
 python test_simulation.py
 ```
 
-This will:
-- Test all imports
-- Load the office building map
-- Run a 30-second simulation
-- Show results
+This script tests all imports, loads the office building map, runs a 30-second simulation, and displays results. Expected output includes agent movement logs and simulation statistics.
 
-**Expected output:** You'll see agent movement and simulation results.
+## Full Simulation
 
----
-
-## Method 2: Full Simulation (5 minutes)
+Execute a complete evacuation simulation:
 
 ```bash
 python test_full_simulation.py
 ```
 
-This will:
-- Run a complete 5-minute evacuation
-- Show detailed agent performance
-- Display which rooms were cleared
+This runs a complete 5-minute evacuation, shows detailed agent performance metrics, and displays which rooms were cleared. Use this method to validate end-to-end functionality before running longer experiments.
 
----
+## Visual Demo
 
-## Method 3: Visual Demo (with plots)
+Generate static visualization outputs:
 
 ```bash
 python scripts/demo_visual.py
 ```
 
-This will:
-- Run the simulation
-- Create 4 visualization files in `demo_results/`
-- Show an interactive dashboard
-- Display graphs of progress
+This script runs the simulation and creates four visualization files in the demo_results directory: 1_building_layout.png (building map), 2_clearance_progress.png (progress over time), 3_agent_paths.png (agent movements), and 4_complete_dashboard.png (full summary). The script also displays an interactive dashboard and progress graphs.
 
-**Output files:**
-- `1_building_layout.png` - Building map
-- `2_clearance_progress.png` - Progress over time
-- `3_agent_paths.png` - Agent movements
-- `4_complete_dashboard.png` - Full summary
+## Interactive Jupyter Notebook
 
----
+The recommended method for exploration and experimentation is the Jupyter notebook interface. Install Jupyter Lab if needed:
 
-## Method 4: Interactive Jupyter Notebook (Recommended)
-
-This is the recommended way to explore the simulation.
-
-### Step 1: Install Jupyter Lab
 ```bash
 pip install jupyterlab
 ```
 
-### Step 2: Launch Jupyter
+Launch Jupyter Lab:
+
 ```bash
 jupyter lab
 ```
 
-### Step 3: Open the Demo Notebook
-In Jupyter Lab, navigate to:
-```
-notebooks/simulation_demo.ipynb
-```
+Navigate to notebooks/simulation_demo.ipynb and run cells using Cell → Run All or Shift+Enter. The notebook provides building visualizations, agent movements, performance graphs, and statistical analysis in an interactive environment.
 
-### Step 4: Run the Cells
-Click **Cell → Run All** or press `Shift+Enter` on each cell
+## Custom Python Script
 
-You'll see:
-- Building visualizations
-- Agent movements
-- Performance graphs
-- Statistical analysis
-
----
-
-## Method 5: Python Script (Custom)
-
-Create a file called `my_simulation.py`:
+Create custom simulation scripts for programmatic control:
 
 ```python
 from haso_sim import simulate
 from haso_sim import generate_summary_report
 
-# Run simulation
 results = simulate(
     map_path="notebooks/data/office_building_simple.yaml",
     config_path="notebooks/data/config_baseline.yaml",
-    tmax=600,  # 10 minutes
+    tmax=600,
     seed=42
 )
 
-# Get results
 world = results['world']
 print(f"Simulation time: {world.time:.1f}s")
 print(f"All rooms cleared: {results['all_cleared']}")
 
-# Generate report
 report = generate_summary_report(world)
 print(report)
 ```
 
-Then run:
+Save this as my_simulation.py and execute:
+
 ```bash
 python my_simulation.py
 ```
 
----
+## Python Interactive Shell
 
-## Method 6: Python Interactive Shell
+For quick experimentation, use the Python interactive shell:
 
 ```bash
 python
 ```
 
-Then type:
+Then execute:
+
 ```python
 >>> from haso_sim import simulate
 >>> results = simulate("notebooks/data/office_building_simple.yaml", tmax=300)
@@ -147,63 +106,35 @@ Then type:
 >>> print(f"Cleared {cleared}/{total} rooms")
 ```
 
----
-
 ## Recommended Path for Beginners
 
-1. **First time?** Run: `python test_simulation.py`
-2. **Want visuals?** Run: `python scripts/demo_visual.py`
-3. **Want to explore?** Run: `jupyter lab` → open `simulation_demo.ipynb`
-4. **Ready to experiment?** Create your own maps and run simulations!
-
----
+First-time users should start with the quick test script to validate the installation. For visual exploration, run the demo visual script. For deeper investigation, launch Jupyter Lab and open the simulation demo notebook. Once comfortable with the basics, experiment with custom maps and configurations.
 
 ## Files You Can Modify
 
-### Building Maps:
-- `notebooks/data/office_building_simple.yaml` - Small office (11 nodes, 7 rooms)
-- `notebooks/data/hospital_wing.yaml` - Hospital with patients (15 nodes, 9 rooms)
+Building maps are defined in YAML files. The office_building_simple.yaml file provides a small office layout with 11 nodes and 7 rooms, while hospital_wing.yaml presents a hospital scenario with 15 nodes and 9 rooms. Configuration files such as config_baseline.yaml control agent setup and parameters.
 
-### Configuration:
-- `notebooks/data/config_baseline.yaml` - Agent setup and parameters
-
-### Try editing:
-- Number of agents
-- Agent roles (Scout, Securer, Checkpointer, Evacuator)
-- Sweep strategies (right, left, corridor)
-- Room priorities
-- Hazard locations
-
----
+You can experiment by editing the number of agents, agent roles (Scout, Securer, Checkpointer, Evacuator), sweep strategies (right, left, corridor), room priorities, and hazard locations.
 
 ## Troubleshooting
 
-### Error: "Module not found"
+Module not found errors typically indicate missing dependencies. Install or upgrade packages:
+
 ```bash
 pip install -r requirements.txt
 ```
 
-### Error: "matplotlib not found" (for visual demo)
+For visualization-specific issues, ensure matplotlib is installed:
+
 ```bash
 pip install matplotlib
 ```
 
-### Error: Import errors
-Make sure you're in the project root directory:
-```bash
-cd "C:\Users\iscur\OneDrive\My Surface docs\Desktop\HIMCM-Topic-A-2025"
-```
+Import errors often occur when scripts are not run from the project root directory. Change to the project root before executing scripts. If simulations run but no rooms are cleared, this may be normal for very short simulations under 60 seconds. Increase tmax to 300 or 600 seconds and check agent logs to understand behavior.
 
-### Simulation runs but no rooms cleared
-This is normal for very short simulations (< 60 seconds). Try:
-- Increase `tmax` to 300 or 600 seconds
-- Check agent logs to see what they're doing
+## Expected Output
 
----
-
-## What You'll See
-
-When you run a simulation, you'll see output like:
+When running a simulation, you'll see output similar to:
 
 ```
 [World] Simulation ended at t=300.00s
@@ -218,45 +149,12 @@ Agent 3 - EVACUATOR | Cleared:  0 | Distance: 136.0m
 Efficiency: 0.60 rooms/minute
 ```
 
----
-
 ## Next Steps
 
-After running your first simulation:
-
-1. **Analyze Results**: Look at agent logs, clearance rates, distances
-2. **Try Different Scenarios**: Hospital, office, custom buildings
-3. **Experiment**: Change sweep strategies, team composition
-4. **Optimize**: Find the fastest way to clear all rooms
-5. **Visualize**: Create charts and animations
-6. **Extend**: Add new features, hazard models, evacuee behaviors
-
----
+After running your first simulation, analyze results by examining agent logs, clearance rates, and distances traveled. Try different scenarios including hospital and office layouts. Experiment with sweep strategies and team compositions. Optimize configurations to find the fastest way to clear all rooms. Create charts and animations for visualization. Extend the simulator with new features, hazard models, and evacuee behaviors.
 
 ## Quick Tips
 
-- **Start small**: Use `office_building_simple.yaml` first
-- **Use Jupyter**: Best for visualization and experimentation
-- **Check logs**: Agent logs show what they're doing
-- **Adjust time**: Use `tmax=600` (10 min) for complete clearance
-- **Save results**: Visualizations save to `demo_results/` folder
+Start with small scenarios using office_building_simple.yaml. Use Jupyter notebooks for the best visualization and experimentation experience. Check agent logs to understand decision-making. Adjust simulation duration using tmax=600 for complete clearance. Visualizations save automatically to the demo_results folder.
 
----
-
-## Ready to Go
-
-You have everything you need. Pick a method above and start simulating.
-
-**Fastest start:**
-```bash
-python test_simulation.py
-```
-
-**Best experience:**
-```bash
-jupyter lab
-# Then open: notebooks/simulation_demo.ipynb
-```
-
-**Need help?** See `README.md` or `GETTING_STARTED.md`
-
+For the fastest start, run the test simulation script. For the best experience, launch Jupyter Lab and open the simulation demo notebook. For additional help, refer to README.md or GETTING_STARTED.md.
