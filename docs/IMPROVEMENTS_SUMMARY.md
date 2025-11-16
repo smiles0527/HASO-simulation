@@ -12,29 +12,39 @@ The Hierarchical Adaptive Search and Optimization algorithm partitions buildings
 
 Mathematical formulation includes workload balancing:
 
-\[W_j = \sum_{i \in Z_j} t_i \cdot A_i \cdot (1 + 2h_i) \cdot (1 + p_i)\]
+```
+W_j = Σ_{i ∈ Z_j} t_i · A_i · (1 + 2h_i) · (1 + p_i)
+```
 
 and assignment optimization:
 
-\[j^* = \arg\max_j \frac{W_j}{L_j + E_i}\]
+```
+j* = arg max_j (W_j / (L_j + E_i))
+```
 
 ## Electrical Flow Dynamics
 
-The flow model applies circuit theory to quantify congestion and optimize routes. Ohm's Law \(I = \Delta V / R\) governs flow rates, while parallel resistance formulas enable multi-exit optimization. Pressure dynamics follow capacitor discharge:
+The flow model applies circuit theory to quantify congestion and optimize routes. Ohm's Law I = ΔV / R governs flow rates, while parallel resistance formulas enable multi-exit optimization. Pressure dynamics follow capacitor discharge:
 
-\[V(t) = V_0 \cdot e^{-t/\tau}\]
+```
+V(t) = V_0 · e^(-t/τ)
+```
 
-where \(\tau = RC\) depends on resistance and capacity. This provides analytical tools for bottleneck identification and route recommendations.
+where τ = RC depends on resistance and capacity. This provides analytical tools for bottleneck identification and route recommendations.
 
 ## Obstacle and Hazard System
 
 Dynamic obstacles support multiple edge types (doors, walls, stairs) with state-dependent traversal. Hazard propagation models fire spread:
 
-\[h_i(t+\Delta t) = \min\left(1.0, h_i(t) + \Delta t \cdot \frac{k_i}{100}\right)\]
+```
+h_i(t+Δt) = min(1.0, h_i(t) + Δt · k_i/100)
+```
 
 and smoke visibility decay:
 
-\[v_i(t+\Delta t) = v_i(t) \cdot e^{-\gamma \Delta t / 10}\]
+```
+v_i(t+Δt) = v_i(t) · e^(-γ·Δt/10)
+```
 
 The system integrates obstacle states into pathfinding cost functions, enabling realistic responder decision-making.
 
@@ -44,7 +54,7 @@ The live dashboard provides multi-panel analytics including building maps, clear
 
 ## Performance Characteristics
 
-Community detection scales as \(O(n \log n)\) for \(n\) nodes. Zone balancing converges within ~10 iterations. Greedy assignment runs in \(O(a \cdot z)\) time for \(a\) agents and \(z\) zones. The system handles buildings with 50+ nodes and 10+ agents in real-time.
+Community detection scales as O(n log n) for n nodes. Zone balancing converges within ~10 iterations. Greedy assignment runs in O(a · z) time for a agents and z zones. The system handles buildings with 50+ nodes and 10+ agents in real-time.
 
 ## Research Applications
 

@@ -14,25 +14,31 @@ The algorithm begins by evaluating each responder's capabilities, including base
 
 Responders are assigned using ILP optimization or greedy assignment. The ILP minimizes:
 
-\[\min \sum_{i,j} t_{ij} \cdot x_{ij}\]
+```
+min Σ_{i,j} t_ij · x_ij
+```
 
-subject to zone coverage and agent capacity constraints, where \(t_{ij}\) is expected completion time for agent \(i\) in zone \(j\), and \(x_{ij} \in \{0,1\}\) indicates assignment.
+subject to zone coverage and agent capacity constraints, where t_ij is expected completion time for agent i in zone j, and x_ij ∈ {0,1} indicates assignment.
 
-The greedy fallback assigns agent \(i\) to zone \(j^*\) where:
+The greedy fallback assigns agent i to zone j* where:
 
-\[j^* = \arg\max_j \frac{W_j}{L_j + E_i}\]
+```
+j* = arg max_j (W_j / (L_j + E_i))
+```
 
-where \(W_j\) is zone workload, \(L_j\) is current load, and \(E_i = s_i \cdot h_i\) is agent efficiency (speed × priority heuristic).
+where W_j is zone workload, L_j is current load, and E_i = s_i · h_i is agent efficiency (speed × priority heuristic).
 
 ## Step 3: Hierarchical Partitioning
 
 Building graphs are partitioned using community detection (greedy modularity) to minimize inter-zone edges. Node importance:
 
-\[w_i = (6 - p_i) \cdot A_i\]
+```
+w_i = (6 - p_i) · A_i
+```
 
-where \(p_i \in [1,5]\) is room priority and \(A_i\) is area. Edge weights represent traversal time: \(w_{ij} = L_{ij} / T_{ij}\) where \(L_{ij}\) is length and \(T_{ij}\) is traversability.
+where p_i ∈ [1,5] is room priority and A_i is area. Edge weights represent traversal time: w_ij = L_ij / T_ij where L_ij is length and T_ij is traversability.
 
-If fewer communities than zones are detected, largest zones are recursively split. Balancing redistributes nodes to equalize workloads using balance weight \(\alpha \in [0,1]\).
+If fewer communities than zones are detected, largest zones are recursively split. Balancing redistributes nodes to equalize workloads using balance weight α ∈ [0,1].
 
 ## Step 4: Dynamic Adaptation
 
@@ -42,35 +48,45 @@ Zone reallocation merges the failed zone into the closest agent's existing zone,
 
 ## Hazard Propagation
 
-Fire spreads to neighbor \(j\) with probability:
+Fire spreads to neighbor j with probability:
 
-\[P_{spread} = p_{base} \cdot h_i(t)\]
+```
+P_spread = p_base · h_i(t)
+```
 
-where \(p_{base}\) is base spread probability and \(h_i(t)\) is fire severity. Fire intensity grows:
+where p_base is base spread probability and h_i(t) is fire severity. Fire intensity grows:
 
-\[h_i(t+\Delta t) = \min\left(1.0, h_i(t) + \Delta t \cdot \frac{k_i}{100}\right)\]
+```
+h_i(t+Δt) = min(1.0, h_i(t) + Δt · k_i/100)
+```
 
-where \(k_i\) is fire spread rate. Smoke visibility decays:
+where k_i is fire spread rate. Smoke visibility decays:
 
-\[v_i(t+\Delta t) = v_i(t) \cdot e^{-\gamma \Delta t / 10}\]
+```
+v_i(t+Δt) = v_i(t) · e^(-γ·Δt/10)
+```
 
-where \(\gamma\) is smoke decay rate.
+where γ is smoke decay rate.
 
 ## Path Planning Integration
 
 Modified A* cost function:
 
-\[c_{ij} = d_{ij} + \beta \cdot h_j + \lambda \cdot (1 - v_j)\]
+```
+c_ij = d_ij + β · h_j + λ · (1 - v_j)
+```
 
-where \(d_{ij}\) is distance, \(h_j\) is hazard severity, \(v_j\) is visibility, and \(\beta, \lambda\) are penalty weights. Agents prefer intra-zone paths but can traverse inter-zone edges when necessary.
+where d_ij is distance, h_j is hazard severity, v_j is visibility, and β, λ are penalty weights. Agents prefer intra-zone paths but can traverse inter-zone edges when necessary.
 
 ## Zone Balancing
 
 Zone workload:
 
-\[W_j = \sum_{i \in Z_j} t_i \cdot A_i \cdot (1 + 2h_i) \cdot (1 + p_i)\]
+```
+W_j = Σ_{i ∈ Z_j} t_i · A_i · (1 + 2h_i) · (1 + p_i)
+```
 
-where \(t_i\) is base search time, \(A_i\) is area, \(h_i\) is hazard severity, and \(p_i\) is occupancy probability. Balancing moves nodes from zones with \(W_j > \bar{W}(1+\alpha)\) to zones with \(W_j < \bar{W}(1-\alpha)\), where \(\bar{W}\) is average workload and \(\alpha \in [0,1]\) is balance weight.
+where t_i is base search time, A_i is area, h_i is hazard severity, and p_i is occupancy probability. Balancing moves nodes from zones with W_j > W̄(1+α) to zones with W_j < W̄(1-α), where W̄ is average workload and α ∈ [0,1] is balance weight.
 
 ## Implementation Details
 
@@ -88,4 +104,4 @@ Zone partitioning occurs during world initialization via the init_zones method. 
 
 ## Performance Considerations
 
-Community detection has complexity \(O(n \log n)\) for \(n\) nodes. Zone balancing converges within ~10 iterations. ILP assignment provides optimal solutions but requires ortools or pulp. The greedy fallback runs in \(O(a \cdot z)\) time for \(a\) agents and \(z\) zones.
+Community detection has complexity O(n log n) for n nodes. Zone balancing converges within ~10 iterations. ILP assignment provides optimal solutions but requires ortools or pulp. The greedy fallback runs in O(a · z) time for a agents and z zones.

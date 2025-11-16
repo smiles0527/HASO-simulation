@@ -6,59 +6,73 @@ The electrical flow model applies circuit theory to quantify evacuee movement an
 
 Ohm's Law governs flow rate:
 
-\[I = \frac{\Delta V}{R}\]
+```
+I = ΔV / R
+```
 
-where \(\Delta V = V_{src} - V_{dst}\) is the pressure gradient driving evacuees from high-pressure areas (hazardous rooms) toward low-pressure areas (exits).
+where ΔV = V_src - V_dst is the pressure gradient driving evacuees from high-pressure areas (hazardous rooms) toward low-pressure areas (exits).
 
 Kirchhoff's Current Law enforces flow conservation at nodes:
 
-\[\sum I_{in} = \sum I_{out} + \frac{dN}{dt}\]
+```
+Σ I_in = Σ I_out + dN/dt
+```
 
-where \(N\) is the number of evacuees in the node.
+where N is the number of evacuees in the node.
 
 Series resistance for sequential bottlenecks:
 
-\[R_{total} = \sum_{i=1}^{n} R_i\]
+```
+R_total = R_1 + R_2 + ... + R_n
+```
 
 Parallel resistance for alternative routes:
 
-\[\frac{1}{R_{total}} = \sum_{i=1}^{n} \frac{1}{R_i}\]
+```
+1/R_total = 1/R_1 + 1/R_2 + ... + 1/R_n
+```
 
 ## Pressure Initialization
 
 Node pressures combine multiple factors:
 
-\[V_i = V_{hazard} + V_{occupancy} + V_{fog}\]
+```
+V_i = V_hazard + V_occupancy + V_fog
+```
 
 where:
-- \(V_{hazard} = 100 \cdot h_i\) (hazard severity \(h_i \in [0,1]\))
-- \(V_{occupancy} = 50 \cdot p_i\) (occupancy probability \(p_i\))
-- \(V_{fog} = 30 \cdot (1 - f_i/3)\) (fog state \(f_i \in \{0,1,2,3\}\))
+- V_hazard = 100 · h_i (hazard severity h_i ∈ [0,1])
+- V_occupancy = 50 · p_i (occupancy probability p_i)
+- V_fog = 30 · (1 - f_i/3) (fog state f_i ∈ {0,1,2,3})
 
-Exits serve as ground nodes with \(V_{exit} = 0\), creating pressure gradients that drive evacuee movement.
+Exits serve as ground nodes with V_exit = 0, creating pressure gradients that drive evacuee movement.
 
 ## Resistance Calculation
 
 Edge resistance follows:
 
-\[R = \rho \cdot \frac{L}{A} \cdot f_{hazard} \cdot f_{visibility}\]
+```
+R = ρ · (L/A) · f_hazard · f_visibility
+```
 
 where:
-- \(\rho = 1.0\) (base resistivity)
-- \(L\) is corridor length
-- \(A = w \cdot h\) is cross-sectional area (width × height)
-- \(f_{hazard} = 1.0 + \frac{h_{src} + h_{dst}}{2}\) (hazard factor)
-- \(f_{visibility} = \frac{1}{\max(0.1, \frac{v_{src} + v_{dst}}{2})}\) (visibility factor)
+- ρ = 1.0 (base resistivity)
+- L is corridor length
+- A = w · h is cross-sectional area (width × height)
+- f_hazard = 1.0 + (h_src + h_dst)/2 (hazard factor)
+- f_visibility = 1 / max(0.1, (v_src + v_dst)/2) (visibility factor)
 
-Non-traversable edges have \(R = \infty\) until cleared.
+Non-traversable edges have R = ∞ until cleared.
 
 ## Flow Rate Computation
 
-Flow rate between nodes \(i\) and \(j\):
+Flow rate between nodes i and j:
 
-\[I_{ij} = \max\left(0, \min\left(\frac{V_i - V_j}{R_{ij}}, N_i\right)\right)\]
+```
+I_ij = max(0, min((V_i - V_j) / R_ij, N_i))
+```
 
-where \(N_i\) is the number of evacuees at node \(i\). Flow is unidirectional (high to low pressure) and bounded by available evacuees.
+where N_i is the number of evacuees at node i. Flow is unidirectional (high to low pressure) and bounded by available evacuees.
 
 ## Parallel Path Analysis
 
@@ -68,31 +82,39 @@ The implementation limits path enumeration to three parallel paths to balance ac
 
 ## Flow Distribution Optimization
 
-Flow distribution to exit \(k\):
+Flow distribution to exit k:
 
-\[p_k = \frac{G_k}{\sum_{j} G_j}\]
+```
+p_k = G_k / Σ_j G_j
+```
 
-where \(G_k = 1/R_k\) is conductance (inverse resistance) for exit \(k\). Higher conductance paths receive proportionally more flow.
+where G_k = 1/R_k is conductance (inverse resistance) for exit k. Higher conductance paths receive proportionally more flow.
 
 ## Pressure Dynamics
 
 Node pressures evolve via capacitor discharge:
 
-\[V(t) = V_0 \cdot e^{-t/\tau}\]
+```
+V(t) = V_0 · e^(-t/τ)
+```
 
-where \(\tau = RC\) is the time constant, \(R\) is effective resistance, and \(C\) is node capacity. The time constant:
+where τ = RC is the time constant, R is effective resistance, and C is node capacity. The time constant:
 
-\[\tau = \frac{1}{I_{out} \cdot C}\]
+```
+τ = 1 / (I_out · C)
+```
 
-Higher outflow rates or larger capacities accelerate pressure decay. Exits maintain \(V_{exit} = 0\) as constant sinks.
+Higher outflow rates or larger capacities accelerate pressure decay. Exits maintain V_exit = 0 as constant sinks.
 
 ## Capacity Modeling
 
 Room capacity (capacitance):
 
-\[C_i = \frac{A_i}{2.0}\]
+```
+C_i = A_i / 2.0
+```
 
-where \(A_i\) is room area in square meters. The 2 m²/person density follows standard occupancy guidelines.
+where A_i is room area in square meters. The 2 m²/person density follows standard occupancy guidelines.
 
 ## Bottleneck Identification
 

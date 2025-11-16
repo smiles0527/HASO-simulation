@@ -40,25 +40,33 @@ Biohazard, explosive, chemical, and radioactive hazards represent specialized th
 
 Search time scales with hazard severity:
 
-\[t_{search} = t_{base} \cdot (1 + 2h_i)\]
+```
+t_search = t_base · (1 + 2h_i)
+```
 
-where \(h_i \in [0,1]\) is hazard severity. Maximum severity triples base search duration. Pathfinding cost includes hazard penalties: \(c_{ij} = d_{ij} + \beta \cdot h_j\) where \(\beta\) is hazard penalty weight.
+where h_i ∈ [0,1] is hazard severity. Maximum severity triples base search duration. Pathfinding cost includes hazard penalties: c_ij = d_ij + β · h_j where β is hazard penalty weight.
 
 ## Hazard Propagation
 
-Fire spreads to neighbor \(j\) with probability:
+Fire spreads to neighbor j with probability:
 
-\[P_{spread} = p_{base} \cdot h_i(t)\]
+```
+P_spread = p_base · h_i(t)
+```
 
-where \(p_{base} = 0.15\) is base spread probability. Fire intensity grows:
+where p_base = 0.15 is base spread probability. Fire intensity grows:
 
-\[h_i(t+\Delta t) = \min\left(1.0, h_i(t) + \Delta t \cdot \frac{k_i}{100}\right)\]
+```
+h_i(t+Δt) = min(1.0, h_i(t) + Δt · k_i/100)
+```
 
-where \(k_i\) is fire spread rate. Smoke visibility decays:
+where k_i is fire spread rate. Smoke visibility decays:
 
-\[v_i(t+\Delta t) = v_i(t) \cdot e^{-\gamma \Delta t / 10}\]
+```
+v_i(t+Δt) = v_i(t) · e^(-γ·Δt/10)
+```
 
-where \(\gamma\) is smoke decay rate.
+where γ is smoke decay rate.
 
 ## Obstacle Interaction Policies
 
