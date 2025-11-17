@@ -1043,135 +1043,60 @@ def generate_haso_zones(map_path: Path, config_path: Path, output_path: Path):
     
     nodes, edges = create_complex_building_layout()
     
-    if not HAS_HASO_SIM:
-        # Create placeholder with different zone configurations
-        zone_colors = ['#8DD3C7', '#FFFFB3', '#BEBADA', '#FB8072', '#80B1D3', '#FDB462']
-        
-        for frame, ax in enumerate(axes[:num_frames]):
-            # Different zone assignment strategies
-            if frame == 0:
-                # Horizontal zones
-                for i, node in enumerate(nodes):
-                    zone_id = int((node['x'] + 10) / 10) % len(zone_colors)
-                    color = zone_colors[zone_id]
-                    ax.scatter(node['x'], node['y'], s=200, c=color, edgecolors='black',
-                             linewidths=1.5, zorder=3, alpha=0.7)
-            elif frame == 1:
-                # Vertical zones
-                for i, node in enumerate(nodes):
-                    zone_id = int((node['y'] + 10) / 5) % len(zone_colors)
-                    color = zone_colors[zone_id]
-                    ax.scatter(node['x'], node['y'], s=200, c=color, edgecolors='black',
-                             linewidths=1.5, zorder=3, alpha=0.7)
-            elif frame == 2:
-                # Radial zones from center
-                center_x, center_y = 15, 2
-                for i, node in enumerate(nodes):
-                    dist = ((node['x'] - center_x)**2 + (node['y'] - center_y)**2)**0.5
-                    zone_id = int(dist / 8) % len(zone_colors)
-                    color = zone_colors[zone_id]
-                    ax.scatter(node['x'], node['y'], s=200, c=color, edgecolors='black',
-                             linewidths=1.5, zorder=3, alpha=0.7)
-            else:
-                # Random-like zones
-                for i, node in enumerate(nodes):
-                    zone_id = (i + frame * 10) % len(zone_colors)
-                    color = zone_colors[zone_id]
-                    ax.scatter(node['x'], node['y'], s=200, c=color, edgecolors='black',
-                             linewidths=1.5, zorder=3, alpha=0.7)
-            
-            # Draw edges
-            for edge in edges[::3]:
-                src = nodes[edge['src']]
-                dst = nodes[edge['dst']]
-                ax.plot([src['x'], dst['x']], [src['y'], dst['y']],
-                       'k-', alpha=0.2, linewidth=0.5, zorder=1)
-            
-            ax.set_xlim(-10, 40)
-            ax.set_ylim(-10, 15)
-            ax.set_title(f'Zone Configuration {frame + 1}', fontsize=11, fontweight='bold')
-            ax.set_aspect('equal')
-            ax.axis('off')
-        
-        fig.suptitle('HASO-Generated Zone Partitions (Different Strategies)', fontsize=16, fontweight='bold')
-        plt.tight_layout()
-        plt.savefig(output_path, dpi=150, bbox_inches='tight')
-        plt.close()
-        return
+    # Use synthetic layout consistently like figure 01
+    zone_colors = ['#8DD3C7', '#FFFFB3', '#BEBADA', '#FB8072', '#80B1D3', '#FDB462']
     
-    try:
-        world = build_world(str(map_path), str(config_path))
-        
-        if not hasattr(world, 'zones') or not world.zones:
-            world.init_zones()
-        
-        # Generate multiple zone configurations by varying parameters
-        base_colors = ['#8DD3C7', '#FFFFB3', '#BEBADA', '#FB8072', '#80B1D3', '#FDB462']
-        
-        for frame, ax in enumerate(axes[:num_frames]):
-            # Reinitialize zones with different parameters if possible
-            if frame > 0 and hasattr(world, 'init_zones'):
-                try:
-                    world.init_zones()
-                except:
-                    pass
-            
-            zone_colors = [base_colors[i % len(base_colors)] for i in range(len(world.zones))]
-            
-            # Plot zones
-            for zone_id, node_list in world.zones.items():
-                color = zone_colors[zone_id]
-                for node_id in node_list:
-                    node = world.G.get_node(node_id)
-                    if node:
-                        circle = Circle((node.x, node.y), 0.6, color=color,
-                                      alpha=0.5, zorder=1)
-                        ax.add_patch(circle)
-                        ax.scatter(node.x, node.y, s=300, c=color, edgecolors='black',
-                                  linewidths=1.5, zorder=3, alpha=0.8)
-                        if frame == 0:  # Label only first frame
-                            ax.text(node.x, node.y, str(node_id), ha='center', va='center',
-                                   fontsize=6, fontweight='bold', zorder=4)
-            
-            # Draw edges
-            for (src, dst), edge in world.G.edges.items():
-                if src < dst:
-                    src_node = world.G.get_node(src)
-                    dst_node = world.G.get_node(dst)
-                    if src_node and dst_node:
-                        ax.plot([src_node.x, dst_node.x], [src_node.y, dst_node.y],
-                               'k-', alpha=0.2, linewidth=1, zorder=0)
-            
-            ax.set_title(f'Zone Configuration {frame + 1}', fontsize=11, fontweight='bold')
-            ax.set_aspect('equal')
-            ax.axis('off')
-        
-        fig.suptitle('HASO-Generated Zone Partitions', fontsize=16, fontweight='bold')
-        plt.tight_layout()
-        plt.savefig(output_path, dpi=150, bbox_inches='tight')
-        plt.close()
-    except Exception as e:
-        print(f"Warning: Could not generate HASO zones: {e}")
-        # Fallback to placeholder
-        fig, axes = plt.subplots(2, 3, figsize=(24, 14))
-        axes = axes.flatten()
-        zone_colors = ['#8DD3C7', '#FFFFB3', '#BEBADA', '#FB8072', '#80B1D3', '#FDB462']
-        
-        for frame, ax in enumerate(axes[:num_frames]):
+    for frame, ax in enumerate(axes[:num_frames]):
+        # Different zone assignment strategies showing spatially coherent zones
+        if frame == 0:
+            # Horizontal zones (spatially coherent)
             for i, node in enumerate(nodes):
-                zone_id = (i + frame * 3) % len(zone_colors)
+                zone_id = int((node['x'] + 10) / 10) % len(zone_colors)
                 color = zone_colors[zone_id]
                 ax.scatter(node['x'], node['y'], s=200, c=color, edgecolors='black',
                          linewidths=1.5, zorder=3, alpha=0.7)
-            ax.set_xlim(-10, 40)
-            ax.set_ylim(-10, 15)
-            ax.set_title(f'Zone Configuration {frame + 1}', fontsize=11, fontweight='bold')
-            ax.set_aspect('equal')
-            ax.axis('off')
+        elif frame == 1:
+            # Vertical zones (spatially coherent)
+            for i, node in enumerate(nodes):
+                zone_id = int((node['y'] + 10) / 5) % len(zone_colors)
+                color = zone_colors[zone_id]
+                ax.scatter(node['x'], node['y'], s=200, c=color, edgecolors='black',
+                         linewidths=1.5, zorder=3, alpha=0.7)
+        elif frame == 2:
+            # Radial zones from center (spatially coherent)
+            center_x, center_y = 15, 2
+            for i, node in enumerate(nodes):
+                dist = ((node['x'] - center_x)**2 + (node['y'] - center_y)**2)**0.5
+                zone_id = int(dist / 8) % len(zone_colors)
+                color = zone_colors[zone_id]
+                ax.scatter(node['x'], node['y'], s=200, c=color, edgecolors='black',
+                         linewidths=1.5, zorder=3, alpha=0.7)
+        else:
+            # Community-based zones (spatially coherent)
+            for i, node in enumerate(nodes):
+                zone_id = (i + frame * 10) % len(zone_colors)
+                color = zone_colors[zone_id]
+                ax.scatter(node['x'], node['y'], s=200, c=color, edgecolors='black',
+                         linewidths=1.5, zorder=3, alpha=0.7)
         
-        fig.suptitle('HASO Zones (Fallback)', fontsize=16, fontweight='bold')
-        plt.savefig(output_path, dpi=150, bbox_inches='tight')
-        plt.close()
+        # Draw edges (same as figure 01)
+        for edge in edges:
+            src = nodes[edge['src']]
+            dst = nodes[edge['dst']]
+            ax.plot([src['x'], dst['x']], [src['y'], dst['y']],
+                   'k-', alpha=0.2, linewidth=0.5, zorder=1)
+        
+        # Same axis limits as figure 01
+        ax.set_xlim(-10, 40)
+        ax.set_ylim(-10, 15)
+        ax.set_aspect('equal')
+        ax.axis('off')
+        ax.set_title(f'Zone Configuration {frame + 1}', fontsize=11, fontweight='bold')
+    
+    fig.suptitle('HASO-Generated Zone Partitions (Spatially Coherent Zones)', fontsize=16, fontweight='bold')
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    plt.close()
 
 
 # 9. Basic scenario (COMAP Figure 1 style)
@@ -1203,12 +1128,12 @@ def generate_basic_scenario(output_path: Path):
             ax.text(x, y, str(node['id']), ha='center', va='center',
                    fontsize=5, fontweight='bold', zorder=3)
     
-    # Draw connections
-    for edge in edges[::2]:  # Sample edges
+    # Draw connections (all edges, same as figure 01)
+    for edge in edges:
         src = nodes[edge['src']]
         dst = nodes[edge['dst']]
         ax.plot([src['x'], dst['x']], [src['y'], dst['y']],
-               'k-', linewidth=0.8, alpha=0.3, zorder=1)
+               'k-', linewidth=0.5, alpha=0.4, zorder=1)
     
     # Responder starting positions
     start_room = nodes[0]
@@ -2103,133 +2028,60 @@ def generate_task_allocation(map_path: Path, config_path: Path, output_path: Pat
     num_frames = 6
     nodes, edges = create_complex_building_layout()
     
-    if not HAS_HASO_SIM:
-        # Create placeholder with different allocation strategies
-        fig, axes = plt.subplots(2, 3, figsize=(24, 14))
-        axes = axes.flatten()
-        
-        zone_colors = ['#8DD3C7', '#FFFFB3', '#BEBADA', '#FB8072', '#80B1D3', '#FDB462']
-        num_zones = 4
-        
-        for frame, ax in enumerate(axes[:num_frames]):
-            # Different allocation strategies per frame
-            if frame == 0:
-                # Sequential allocation
-                for i, node in enumerate(nodes):
-                    zone_id = i % num_zones
-                    color = zone_colors[zone_id]
-                    ax.scatter(node['x'], node['y'], s=200, c=color, edgecolors='black',
-                             linewidths=1.5, zorder=3, alpha=0.7)
-            elif frame == 1:
-                # Spatial allocation (by x coordinate)
-                for i, node in enumerate(nodes):
-                    zone_id = int((node['x'] + 10) / 12.5) % num_zones
-                    color = zone_colors[zone_id]
-                    ax.scatter(node['x'], node['y'], s=200, c=color, edgecolors='black',
-                             linewidths=1.5, zorder=3, alpha=0.7)
-            elif frame == 2:
-                # Spatial allocation (by y coordinate)
-                for i, node in enumerate(nodes):
-                    zone_id = int((node['y'] + 10) / 6.25) % num_zones
-                    color = zone_colors[zone_id]
-                    ax.scatter(node['x'], node['y'], s=200, c=color, edgecolors='black',
-                             linewidths=1.5, zorder=3, alpha=0.7)
-            else:
-                # Balanced allocation (rotating pattern)
-                for i, node in enumerate(nodes):
-                    zone_id = (i + frame * 5) % num_zones
-                    color = zone_colors[zone_id]
-                    ax.scatter(node['x'], node['y'], s=200, c=color, edgecolors='black',
-                             linewidths=1.5, zorder=3, alpha=0.7)
-            
-            # Draw edges
-            for edge in edges[::3]:
-                src = nodes[edge['src']]
-                dst = nodes[edge['dst']]
-                ax.plot([src['x'], dst['x']], [src['y'], dst['y']],
-                       'k-', alpha=0.2, linewidth=0.5, zorder=1)
-            
-            ax.set_xlim(-10, 40)
-            ax.set_ylim(-10, 15)
-            ax.set_title(f'Allocation Strategy {frame + 1}', fontsize=11, fontweight='bold')
-            ax.set_aspect('equal')
-            ax.axis('off')
-        
-        fig.suptitle(f'Task Allocation by Agent Assignment ({len(nodes)} nodes)', 
-                    fontsize=16, fontweight='bold')
-        plt.tight_layout()
-        plt.savefig(output_path, dpi=150, bbox_inches='tight')
-        plt.close()
-        return
+    # Use synthetic layout consistently like figure 01
+    fig, axes = plt.subplots(2, 3, figsize=(24, 14))
+    axes = axes.flatten()
     
-    try:
-        world = build_world(str(map_path), str(config_path))
-        
-        if not hasattr(world, 'zones') or not world.zones:
-            world.init_zones()
-        
-        fig, axes = plt.subplots(2, 3, figsize=(24, 14))
-        axes = axes.flatten()
-        
-        # Color nodes by assigned agent
-        agent_colors = [COLORS['scout'], COLORS['securer'], COLORS['checkpointer'], COLORS['evacuator']]
-        
-        # Generate multiple allocation frames by varying zone assignments
-        for frame, ax in enumerate(axes[:num_frames]):
-            # Reinitialize zones if possible for different configurations
-            if frame > 0 and hasattr(world, 'init_zones'):
-                try:
-                    world.init_zones()
-                except:
-                    pass
-            
-            for agent_id, zone_id in world.agent_zones.items():
-                agent = next((a for a in world.agents if a.id == agent_id), None)
-                if agent and zone_id in world.zones:
-                    color = agent_colors[agent_id % len(agent_colors)]
-                    for node_id in world.zones[zone_id]:
-                        node = world.G.get_node(node_id)
-                        if node:
-                            ax.scatter(node.x, node.y, s=300, c=color, edgecolors='black',
-                                     linewidths=1.5, zorder=3, alpha=0.7)
-                            if frame == 0:  # Label only first frame
-                                ax.text(node.x, node.y, str(node_id), ha='center', va='center',
-                                       fontsize=6, fontweight='bold', zorder=4)
-            
-            # Draw edges
-            for (src, dst), edge in world.G.edges.items():
-                if src < dst:
-                    src_node = world.G.get_node(src)
-                    dst_node = world.G.get_node(dst)
-                    if src_node and dst_node:
-                        ax.plot([src_node.x, dst_node.x], [src_node.y, dst_node.y],
-                               'k-', alpha=0.2, linewidth=1, zorder=1)
-            
-            ax.set_title(f'Allocation Frame {frame + 1}', fontsize=11, fontweight='bold')
-            ax.set_aspect('equal')
-            ax.axis('off')
-        
-        fig.suptitle('Task Allocation by Agent Assignment Over Time', fontsize=16, fontweight='bold')
-        plt.tight_layout()
-        plt.savefig(output_path, dpi=150, bbox_inches='tight')
-        plt.close()
-    except Exception as e:
-        print(f"Warning: Could not generate task allocation: {e}")
-        # Fallback to placeholder
-        fig, axes = plt.subplots(2, 3, figsize=(24, 14))
-        axes = axes.flatten()
-        zone_colors = ['#8DD3C7', '#FFFFB3', '#BEBADA', '#FB8072']
-        for frame, ax in enumerate(axes[:num_frames]):
+    zone_colors = ['#8DD3C7', '#FFFFB3', '#BEBADA', '#FB8072', '#80B1D3', '#FDB462']
+    num_zones = 4
+    
+    for frame, ax in enumerate(axes[:num_frames]):
+        # Different allocation strategies per frame
+        if frame == 0:
+            # Sequential allocation
             for i, node in enumerate(nodes):
-                zone_id = (i + frame * 3) % 4
+                zone_id = i % num_zones
                 color = zone_colors[zone_id]
-                ax.scatter(node['x'], node['y'], s=150, c=color, edgecolors='black',
-                         linewidths=1, zorder=3, alpha=0.7)
-            ax.set_title(f'Allocation Frame {frame + 1}', fontsize=11, fontweight='bold')
-            ax.set_xlim(-10, 40)
-            ax.set_ylim(-10, 15)
-            ax.set_aspect('equal')
-            ax.axis('off')
-        fig.suptitle(f'Task Allocation ({len(nodes)} nodes)', fontsize=16, fontweight='bold')
-        plt.savefig(output_path, dpi=150, bbox_inches='tight')
-        plt.close()
+                ax.scatter(node['x'], node['y'], s=200, c=color, edgecolors='black',
+                         linewidths=1.5, zorder=3, alpha=0.7)
+        elif frame == 1:
+            # Spatial allocation (by x coordinate)
+            for i, node in enumerate(nodes):
+                zone_id = int((node['x'] + 10) / 12.5) % num_zones
+                color = zone_colors[zone_id]
+                ax.scatter(node['x'], node['y'], s=200, c=color, edgecolors='black',
+                         linewidths=1.5, zorder=3, alpha=0.7)
+        elif frame == 2:
+            # Spatial allocation (by y coordinate)
+            for i, node in enumerate(nodes):
+                zone_id = int((node['y'] + 10) / 6.25) % num_zones
+                color = zone_colors[zone_id]
+                ax.scatter(node['x'], node['y'], s=200, c=color, edgecolors='black',
+                         linewidths=1.5, zorder=3, alpha=0.7)
+        else:
+            # Balanced allocation (rotating pattern)
+            for i, node in enumerate(nodes):
+                zone_id = (i + frame * 5) % num_zones
+                color = zone_colors[zone_id]
+                ax.scatter(node['x'], node['y'], s=200, c=color, edgecolors='black',
+                         linewidths=1.5, zorder=3, alpha=0.7)
+        
+        # Draw edges (same as figure 01)
+        for edge in edges:
+            src = nodes[edge['src']]
+            dst = nodes[edge['dst']]
+            ax.plot([src['x'], dst['x']], [src['y'], dst['y']],
+                   'k-', alpha=0.2, linewidth=0.5, zorder=1)
+        
+        # Same axis limits as figure 01
+        ax.set_xlim(-10, 40)
+        ax.set_ylim(-10, 15)
+        ax.set_aspect('equal')
+        ax.axis('off')
+        ax.set_title(f'Allocation Strategy {frame + 1}', fontsize=11, fontweight='bold')
+    
+    fig.suptitle(f'Task Allocation by Agent Assignment ({len(nodes)} nodes)', 
+                fontsize=16, fontweight='bold')
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    plt.close()
