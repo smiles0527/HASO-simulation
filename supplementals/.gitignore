@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+# Allow figures/ directory and PNG files to be committed
+# figures/
+# *.png
+
