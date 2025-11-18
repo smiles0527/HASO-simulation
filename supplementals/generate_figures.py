@@ -410,8 +410,8 @@ def generate_spatial_embedding(map_path: Path, output_path: Path):
     
     ax.set_xlim(-10, 40)
     ax.set_ylim(-10, 15)
-    ax.set_title(f'Spatial Embedding of Building Graph ({len(nodes)} nodes, {len(edges)} edges)', 
-                fontsize=14, fontweight='bold')
+    ax.set_title('Geometric layout of nodes used for traversal computation', 
+                fontsize=42, fontweight='bold')
     plt.tight_layout()
     plt.savefig(output_path, dpi=150, bbox_inches='tight')
     plt.close()
@@ -479,8 +479,8 @@ def generate_weighted_traversal_costs(map_path: Path, output_path: Path):
     
     ax.set_xlim(-10, 40)
     ax.set_ylim(-10, 15)
-    ax.set_title(f'Weighted Traversal Costs ({len(nodes)} nodes, {len(edges)} edges)', 
-                fontsize=14, fontweight='bold')
+    ax.set_title('Traversal weights incorporating hazard and congestion', 
+                fontsize=42, fontweight='bold')
     plt.tight_layout()
     plt.savefig(output_path, dpi=150, bbox_inches='tight')
     plt.close()
@@ -585,7 +585,7 @@ def generate_hazard_routing(map_path: Path, output_path: Path):
     ax.set_xlim(-10, 40)
     ax.set_ylim(-10, 15)
     ax.set_title(f'Agent Routing Over Hazard-Modified Graph ({len(nodes)} nodes)', 
-                fontsize=14, fontweight='bold')
+                fontsize=42, fontweight='bold')
     plt.tight_layout()
     plt.savefig(output_path, dpi=150, bbox_inches='tight')
     plt.close()
@@ -693,11 +693,11 @@ def generate_hazard_diffusion(map_path: Path, output_path: Path):
         
         ax.set_xlim(-10, 40)
         ax.set_ylim(-10, 15)
-        ax.set_title(f't = {t_idx} ({len(nodes)} nodes)', fontsize=11, fontweight='bold')
+        ax.set_title(f't = {t_idx} ({len(nodes)} nodes)', fontsize=33, fontweight='bold')
         ax.set_aspect('equal')
         ax.axis('off')
     
-    fig.suptitle('Hazard Intensity Diffusion Over Time', fontsize=16, fontweight='bold')
+    fig.suptitle('Hazard diffusion across the building graph', fontsize=48, fontweight='bold')
     plt.tight_layout()
     plt.savefig(output_path, dpi=150, bbox_inches='tight')
     plt.close()
@@ -706,7 +706,7 @@ def generate_hazard_diffusion(map_path: Path, output_path: Path):
 # 5. Securer mitigation
 def generate_securer_mitigation(map_path: Path, output_path: Path):
     """Before/during/after securer intervention."""
-    fig, axes = plt.subplots(1, 4, figsize=(20, 5))
+    fig, axes = plt.subplots(1, 4, figsize=(24, 10))
     axes = axes.flatten()
     
     nodes, edges = create_complex_building_layout()
@@ -795,12 +795,12 @@ def generate_securer_mitigation(map_path: Path, output_path: Path):
         
         ax.set_xlim(-10, 40)
         ax.set_ylim(-10, 15)
-        ax.set_title(title, fontsize=11, fontweight='bold')
+        ax.set_title(title, fontsize=25, fontweight='bold', y=0.98, pad=0)
         ax.set_aspect('equal')
         ax.axis('off')
     
-    fig.suptitle('Securer Mitigation Reducing Hazard Intensity', fontsize=14, fontweight='bold')
-    plt.tight_layout()
+    fig.suptitle('Securer intervention stabilizing a hazardous region', fontsize=42, fontweight='bold', y=0.995)
+    plt.subplots_adjust(top=0.82, bottom=0.08, left=0.05, right=0.95, wspace=0.25)
     plt.savefig(output_path, dpi=150, bbox_inches='tight')
     plt.close()
 
@@ -898,11 +898,11 @@ def generate_evacuee_escort(map_path: Path, output_path: Path):
         
         ax.set_xlim(-10, 40)
         ax.set_ylim(-10, 15)
-        ax.set_title(f'Frame {frame + 1}', fontsize=11, fontweight='bold')
+        ax.set_title(f'Frame {frame + 1}', fontsize=33, fontweight='bold')
         ax.set_aspect('equal')
         ax.axis('off')
     
-    fig.suptitle('Evacuee Escort Sequence', fontsize=14, fontweight='bold')
+    fig.suptitle('Evacuee movement during escort by an evacuator', fontsize=42, fontweight='bold')
     plt.tight_layout()
     plt.savefig(output_path, dpi=150, bbox_inches='tight')
     plt.close()
@@ -1024,11 +1024,11 @@ def generate_hazard_routing_interaction(map_path: Path, output_path: Path):
         
         ax.set_xlim(-10, 40)
         ax.set_ylim(-10, 15)
-        ax.set_title(f'Frame {frame + 1}: Path Progression', fontsize=11, fontweight='bold')
+        ax.set_title(f'Frame {frame + 1}: Path Progression', fontsize=33, fontweight='bold')
         ax.set_aspect('equal')
         ax.axis('off')
     
-    fig.suptitle('Hazard-Routing-Evacuee Interaction Over Time', fontsize=16, fontweight='bold')
+    fig.suptitle('Routing and decision-making integrated with graph dynamics', fontsize=48, fontweight='bold')
     plt.tight_layout()
     plt.savefig(output_path, dpi=150, bbox_inches='tight')
     plt.close()
@@ -1091,9 +1091,9 @@ def generate_haso_zones(map_path: Path, config_path: Path, output_path: Path):
         ax.set_ylim(-10, 15)
         ax.set_aspect('equal')
         ax.axis('off')
-        ax.set_title(f'Zone Configuration {frame + 1}', fontsize=11, fontweight='bold')
+        ax.set_title(f'Zone Configuration {frame + 1}', fontsize=33, fontweight='bold')
     
-    fig.suptitle('HASO-Generated Zone Partitions (Spatially Coherent Zones)', fontsize=16, fontweight='bold')
+    fig.suptitle('Coupled interactions between hazards, routing, and evacuee assistance', fontsize=48, fontweight='bold')
     plt.tight_layout()
     plt.savefig(output_path, dpi=150, bbox_inches='tight')
     plt.close()
@@ -1151,7 +1151,7 @@ def generate_basic_scenario(output_path: Path):
     ax.set_xlim(-10, 40)
     ax.set_ylim(-10, 15)
     ax.set_title(f'Basic Scenario: Complex Building ({len(nodes)} rooms, {len(edges)} edges)', 
-                fontsize=14, fontweight='bold')
+                fontsize=42, fontweight='bold')
     ax.legend(loc='upper left', fontsize=9)
     plt.tight_layout()
     plt.savefig(output_path, dpi=150, bbox_inches='tight')
@@ -1275,7 +1275,7 @@ def generate_additional_layouts(output_dir: Path):
     ax.set_xlim(-1, 18)
     ax.set_ylim(-1, 15)
     ax.set_title(f'School Wing: {len(nodes)} rooms, {len(edges)} edges', 
-                fontsize=14, fontweight='bold')
+                fontsize=42, fontweight='bold')
     plt.tight_layout()
     plt.savefig(output_dir / "10_school_wing.png", dpi=150, bbox_inches='tight')
     plt.close()
@@ -1431,7 +1431,7 @@ def generate_additional_layouts(output_dir: Path):
     ax.set_xlim(-1, 12)
     ax.set_ylim(-1, 11)
     ax.set_title(f'Lab Block with Hazards: {len(nodes)} rooms, {len(edges)} edges', 
-                fontsize=14, fontweight='bold')
+                fontsize=42, fontweight='bold')
     plt.tight_layout()
     plt.savefig(output_dir / "11_lab_block.png", dpi=150, bbox_inches='tight')
     plt.close()
@@ -1518,12 +1518,12 @@ def generate_sweep_paths(map_dir: Path, output_dir: Path):
         ax.set_xlim(-10, 40)
         ax.set_ylim(-10, 15)
         ax.set_title(f'Frame {frame + 1}: {current_progress}/{len(sweep_order)} rooms', 
-                    fontsize=11, fontweight='bold')
+                    fontsize=33, fontweight='bold')
         ax.set_aspect('equal')
         ax.axis('off')
     
     fig.suptitle(f'Sweep Path: Room-Checking Sequence ({len(sweep_order)} rooms)', 
-                fontsize=16, fontweight='bold')
+                fontsize=48, fontweight='bold')
     plt.tight_layout()
     plt.savefig(output_dir / "12_sweep_paths.png", dpi=150, bbox_inches='tight')
     plt.close()
@@ -1574,20 +1574,20 @@ def generate_clearance_time_plots(map_path: Path, config_path: Path, output_path
     ax1 = fig.add_subplot(gs[0, :num_snapshots//2])
     ax1.plot(times, cleared, 'b-', linewidth=2.5)
     ax1.set_ylabel('Cleared Rooms', fontsize=11)
-    ax1.set_title('Clearance Progress Over Time', fontsize=12, fontweight='bold')
+    ax1.set_title('Clearance Progress Over Time', fontsize=36, fontweight='bold')
     ax1.grid(True, alpha=0.3)
     
     ax2 = fig.add_subplot(gs[1, :num_snapshots//2])
     ax2.plot(times, hazards, 'r-', linewidth=2.5)
     ax2.set_ylabel('Avg Hazard Intensity', fontsize=11)
-    ax2.set_title('Hazard Intensity Over Time', fontsize=12, fontweight='bold')
+    ax2.set_title('Hazard Intensity Over Time', fontsize=36, fontweight='bold')
     ax2.grid(True, alpha=0.3)
     
     ax3 = fig.add_subplot(gs[2, :num_snapshots//2])
     ax3.plot(times, congestion, 'g-', linewidth=2.5)
     ax3.set_xlabel('Time (s)', fontsize=11)
     ax3.set_ylabel('Congestion Level', fontsize=11)
-    ax3.set_title('Congestion Over Time', fontsize=12, fontweight='bold')
+    ax3.set_title('Congestion Over Time', fontsize=36, fontweight='bold')
     ax3.grid(True, alpha=0.3)
     
     # Snapshot plots (right side)
@@ -1620,11 +1620,11 @@ def generate_clearance_time_plots(map_path: Path, config_path: Path, output_path
         ax.set_xlim(-10, 40)
         ax.set_ylim(-10, 15)
         ax.set_title(f't={int(snapshot_time)}s\nCleared: {int(cleared_at_time)}', 
-                    fontsize=9, fontweight='bold')
+                    fontsize=27, fontweight='bold')
         ax.set_aspect('equal')
         ax.axis('off')
     
-    fig.suptitle('Clearance Time Analysis with Snapshots', fontsize=16, fontweight='bold')
+    fig.suptitle('Clearance Time Analysis with Snapshots', fontsize=48, fontweight='bold')
     plt.tight_layout()
     plt.savefig(output_path, dpi=150, bbox_inches='tight')
     plt.close()
@@ -1709,11 +1709,11 @@ def generate_agent_trajectories(map_path: Path, config_path: Path, output_path: 
             
             ax.set_xlim(-10, 40)
             ax.set_ylim(-10, 15)
-            ax.set_title(f'Frame {frame + 1}: Agent Movement', fontsize=11, fontweight='bold')
+            ax.set_title(f'Frame {frame + 1}: Agent Movement', fontsize=33, fontweight='bold')
             ax.set_aspect('equal')
             ax.axis('off')
         
-        fig.suptitle('Agent Trajectories Over Time (Color-Coded by Role)', fontsize=16, fontweight='bold')
+        fig.suptitle('Agent Trajectories Over Time (Color-Coded by Role)', fontsize=48, fontweight='bold')
         plt.tight_layout()
         plt.savefig(output_path, dpi=150, bbox_inches='tight')
         plt.close()
@@ -1759,9 +1759,9 @@ def generate_agent_trajectories(map_path: Path, config_path: Path, output_path: 
                     ax.text(x, y, f'A{agent.id}', ha='center', va='center',
                            fontsize=8, fontweight='bold', color='white', zorder=6)
             
-            ax.set_title(f'Frame {frame + 1}', fontsize=11, fontweight='bold')
+            ax.set_title(f'Frame {frame + 1}', fontsize=33, fontweight='bold')
         
-        fig.suptitle('Agent Trajectories Over Time (Color-Coded by Role)', fontsize=16, fontweight='bold')
+        fig.suptitle('Agent Trajectories Over Time (Color-Coded by Role)', fontsize=48, fontweight='bold')
         plt.tight_layout()
         plt.savefig(output_path, dpi=150, bbox_inches='tight')
         plt.close()
@@ -1856,14 +1856,14 @@ def generate_hazard_heatmap(map_path: Path, output_path: Path):
         
         ax.set_xlim(-10, 40)
         ax.set_ylim(-10, 15)
-        ax.set_title(f'Frame {frame + 1}: Hazard Evolution', fontsize=11, fontweight='bold')
+        ax.set_title(f'Frame {frame + 1}: Hazard Evolution', fontsize=33, fontweight='bold')
         ax.set_aspect('equal')
         ax.axis('off')
     
     # Add colorbar
     fig.colorbar(scatter, ax=axes, label='Hazard Severity', shrink=0.8, pad=0.02)
     fig.suptitle(f'Hazard Intensity Heatmap Evolution ({len(nodes)} nodes)', 
-                fontsize=16, fontweight='bold')
+                fontsize=48, fontweight='bold')
     plt.tight_layout()
     plt.savefig(output_path, dpi=150, bbox_inches='tight')
     plt.close()
@@ -1910,11 +1910,11 @@ def generate_stress_test(map_path: Path, output_path: Path):
         
         ax.set_xlim(-0.5, 8.5)
         ax.set_ylim(-0.5, 1.5)
-        ax.set_title(f'Frame {frame + 1}: {num_agents} Agents', fontsize=11, fontweight='bold')
+        ax.set_title(f'Frame {frame + 1}: {num_agents} Agents', fontsize=33, fontweight='bold')
         ax.set_aspect('equal')
         ax.axis('off')
     
-    fig.suptitle('Stress Test: Agent Count vs Congestion', fontsize=16, fontweight='bold')
+    fig.suptitle('Stress Test: Agent Count vs Congestion', fontsize=48, fontweight='bold')
     plt.tight_layout()
     plt.savefig(output_path, dpi=150, bbox_inches='tight')
     plt.close()
@@ -1961,7 +1961,7 @@ def generate_state_machine(output_path: Path):
     
     ax.set_xlim(0, 8)
     ax.set_ylim(0, 5)
-    ax.set_title('Agent State Machine', fontsize=14, fontweight='bold')
+    ax.set_title('Agent State Machine', fontsize=42, fontweight='bold')
     plt.tight_layout()
     plt.savefig(output_path, dpi=150, bbox_inches='tight')
     plt.close()
@@ -2016,7 +2016,7 @@ def generate_flowchart(output_path: Path):
     
     ax.set_xlim(3, 7)
     ax.set_ylim(0, 8)
-    ax.set_title('Discrete-Event Simulation Engine Flowchart', fontsize=14, fontweight='bold')
+    ax.set_title('Discrete-Event Simulation Engine Flowchart', fontsize=42, fontweight='bold')
     plt.tight_layout()
     plt.savefig(output_path, dpi=150, bbox_inches='tight')
     plt.close()
@@ -2078,10 +2078,10 @@ def generate_task_allocation(map_path: Path, config_path: Path, output_path: Pat
         ax.set_ylim(-10, 15)
         ax.set_aspect('equal')
         ax.axis('off')
-        ax.set_title(f'Allocation Strategy {frame + 1}', fontsize=11, fontweight='bold')
+        ax.set_title(f'Allocation Strategy {frame + 1}', fontsize=33, fontweight='bold')
     
     fig.suptitle(f'Task Allocation by Agent Assignment ({len(nodes)} nodes)', 
-                fontsize=16, fontweight='bold')
+                fontsize=48, fontweight='bold')
     plt.tight_layout()
     plt.savefig(output_path, dpi=150, bbox_inches='tight')
     plt.close()
