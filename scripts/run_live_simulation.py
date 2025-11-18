@@ -21,7 +21,6 @@ Usage:
     
     Video Export:
         python run_live_simulation.py --save-video --video-path output.mp4
-    
     Custom Configuration:
         python run_live_simulation.py --map data/hospital.yaml --duration 600 --fps 15
 
